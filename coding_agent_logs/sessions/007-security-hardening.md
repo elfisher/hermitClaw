@@ -17,6 +17,9 @@
   - Modified `docker-compose.yml` to use `DB_PASSWORD` environment variable for `POSTGRES_PASSWORD`.
   - Updated `.env.example` to reflect this change.
 - **P1: Incomplete SSRF guard**: Enhanced SSRF protection.
+- **P1: No TLS**: Documented reverse proxy requirement.
+  - Added "Deployment Considerations (TLS/Reverse Proxy)" section to `README.md`.
+  - Updated "Security Model" and "Roadmap" in `README.md` to reference TLS documentation.
 - **P2: No rate limiting on `/v1/execute`**: Implemented per-crab rate limiting for the execute route.
   - Installed `@fastify/rate-limit` package.
   - Registered `fastifyRateLimit` plugin in `src/routes/execute.ts` with `max: 60` requests per `timeWindow: '1 minute'`.
@@ -32,7 +35,6 @@
 
 ## Skipped Tasks:
 
-- **P1: No TLS**: Requires environment setup.
 - **P2: Shell injection in provisioning scripts**: Provisioning scripts are not yet built.
 
 

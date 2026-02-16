@@ -181,10 +181,10 @@ examples/clawbot-base/
   `192.168.x`). IPv6 loopback (`::1`) not blocked. DNS rebinding not mitigated.
   **Fix:** resolve URL to IP, check against RFC-1918 + loopback ranges before executing.
 
-- [ ] **Default DB password** — `docker-compose.yml` ships `securepass`. Most users won't
-  change it. **Fix:** require `DB_PASSWORD` env var, no hardcoded default. (SKIPPED)
+- [x] **Default DB password** — `docker-compose.yml` ships `securepass`. Most users won't
+  change it. **Fix:** require `DB_PASSWORD` env var, no hardcoded default.
 
-- [ ] **No TLS** — Shell port is plain HTTP. Fine for isolated Mac mini, problem on shared
+- [x] **No TLS** — Shell port is plain HTTP. Fine for isolated Mac mini, problem on shared
   networks. **Fix:** document reverse proxy requirement (nginx/Caddy) in README.
 
 ### P2 — Before sharing with others
@@ -198,8 +198,8 @@ examples/clawbot-base/
 - [x] **No request timeout on outbound calls** — slow upstream hangs connection indefinitely.
   **Fix:** 30s timeout on undici requests.
 
-- [ ] **No token rotation** — tokens are permanent until manually revoked. No expiry.
-  **Fix:** optional `expiresAt` field on crabs table, checked in `requireCrab`. (SKIPPED)
+- [x] **No token rotation** — tokens are permanent until manually revoked. No expiry.
+  **Fix:** optional `expiresAt` field on crabs table, checked in `requireCrab`.
 
 ### P3 — Known tradeoffs, document only
 
