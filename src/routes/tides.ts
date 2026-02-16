@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { db } from '../lib/db.js';
+import { requireAdmin } from '../lib/auth.js';
 
 export async function tidesRoutes(app: FastifyInstance) {
   /**
@@ -8,7 +9,7 @@ export async function tidesRoutes(app: FastifyInstance) {
    */
   app.get<{
     Querystring: { crabId?: string; page?: string; limit?: string };
-  }>('/v1/tides', async (request, reply) => {
+  }>('/v1/tides', { preHandler: [requireAdmin] }, async (request, reply) => {
     const crabId = request.query.crabId;
     const page = Math.max(1, parseInt(request.query.page ?? '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(request.query.limit ?? '50', 10)));

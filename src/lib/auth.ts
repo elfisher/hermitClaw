@@ -1,13 +1,39 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { db } from './db.js';
+import type { Crab } from '@prisma/client';
+
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 // Attached to request after successful auth
 declare module 'fastify' {
   interface FastifyRequest {
-    crab?: {
-      id: string;
-      name: string;
-    };
+    crab?: Crab;
+  }
+}
+
+/**
+ * Pre-handler that validates the admin API key.
+ * Rejects with 401 if missing or invalid.
+ */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  if (!ADMIN_API_KEY) {
+    // This is a server configuration error, not a client error.
+    // Should not happen in a correctly configured environment.
+    console.error('CRITICAL: ADMIN_API_KEY is not configured. Management routes are unprotected.');
+    return reply.status(500).send({ error: 'Server configuration error' });
+  }
+
+  const clientKey = request.headers['x-admin-api-key'];
+
+  if (!clientKey) {
+    return reply.status(401).send({ error: 'Missing x-admin-api-key header' });
+  }
+
+  if (clientKey !== ADMIN_API_KEY) {
+    return reply.status(401).send({ error: 'Invalid admin API key' });
   }
 }
 
@@ -38,5 +64,5 @@ export async function requireCrab(
     return reply.status(403).send({ error: `Agent "${crab.name}" has been revoked` });
   }
 
-  request.crab = { id: crab.id, name: crab.name };
+  request.crab = crab;
 }

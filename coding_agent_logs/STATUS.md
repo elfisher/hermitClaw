@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** Clawbot Provisioning System (design complete, not yet built)
-**Last Session:** `006-clawbot-provisioning-design` (design/discussion only, no code)
-**Build status:** `tsc` clean. Vite build clean. 53/53 tests passing. Docker not yet verified (requires Docker daemon).
+**Active Phase:** Security Hardening (P1 and P2 completed)
+**Last Session:** `007-security-hardening`
+**Build status:** `tsc` clean. Vite build clean. 88/88 tests passing. Docker not yet verified (requires Docker daemon).
 
 ---
 
@@ -27,10 +27,14 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Phase 1 — Crypto + Vault** — complete (`002-phase-1-crypto-vault.md`)
 - [x] **Phase 2 — Execute Gateway** — complete (`003-phase-2-execute-gateway.md`)
 - [x] **Phase 3 — Tide Pool UI** — complete (`005-phase-3-tide-pool-ui.md`)
+- [x] **Security Hardening (P0)** — complete (`007-security-hardening.md`)
+- [x] **Security Hardening (P1)** — complete (partial, see backlog below)
+- [x] **Security Hardening (P2)** — complete (partial, see backlog below)
 - [ ] **Clawbot Provisioning** — design complete, not yet built (see below)
-- [ ] **Security Hardening** — partially designed, not yet built (see backlog below)
 - [ ] **Phase 4 — Python Example Agent** — not started
 - [ ] **Phase 5 — Ingress Routing** — deferred (post-MVP)
+- [ ] **Phase 6 — Activity Monitor** — not started (design needed)
+- [ ] **Phase 7 — Risk Scanner** — not started (design needed)
 
 ---
 
@@ -39,10 +43,10 @@ Full plan: [`PLAN.md`](../PLAN.md)
 ### Option A: Build Clawbot Provisioning System
 Design is fully agreed. See "Clawbot Provisioning Design" section below.
 
-### Option B: Security Hardening (recommended before provisioning)
-Several P0/P1 issues should be fixed before provisioning is built on top of an insecure base. See "Security Backlog" section below.
+### Option B: Security Hardening (Remaining P1/P2)
+Several remaining P1/P2 issues should be fixed before provisioning is built on top of an insecure base. See "Security Backlog" section below.
 
-**Suggested order:** Security P0s → Clawbot Provisioning → Security P1s → Python Example Agent
+**Suggested order:** Clawbot Provisioning → Security P1s → Python Example Agent
 
 ---
 
@@ -159,26 +163,26 @@ examples/clawbot-base/
 
 ### P0 — Fix before real use
 
-- [ ] **Admin API auth** — `POST /v1/crabs`, `GET /v1/secrets`, `DELETE /v1/secrets/:id`,
+- [x] **Admin API auth** — `POST /v1/crabs`, `GET /v1/secrets`, `DELETE /v1/secrets/:id`,
   `PATCH /v1/crabs/:id/revoke`, `GET /v1/tides` are all unauthenticated. Anyone on the
   network can call them. **Fix:** `ADMIN_API_KEY` in `.env`, required header on all
   management routes. Gates the Tide Pool UI too (one fix, two problems solved).
 
-- [ ] **Tide Pool UI has no login** — same exposure as above. Fixed by admin API key.
+- [x] **Tide Pool UI has no login** — same exposure as above. Fixed by admin API key.
 
-- [ ] **No tool allowlisting** — execute route validates *who* is calling but not *what*
+- [x] **No tool allowlisting** — execute route validates *who* is calling but not *what*
   they can call. A prompt-injected agent with a valid token can call any URL with any
   method. **Fix:** add `allowedTools: [{ url, method }]` array to pearl schema. Execute
   route checks before proxying.
 
 ### P1 — High priority
 
-- [ ] **Incomplete SSRF guard** — private IP ranges not blocked (`10.x`, `172.16-31.x`,
+- [x] **Incomplete SSRF guard** — private IP ranges not blocked (`10.x`, `172.16-31.x`,
   `192.168.x`). IPv6 loopback (`::1`) not blocked. DNS rebinding not mitigated.
   **Fix:** resolve URL to IP, check against RFC-1918 + loopback ranges before executing.
 
 - [ ] **Default DB password** — `docker-compose.yml` ships `securepass`. Most users won't
-  change it. **Fix:** require `DB_PASSWORD` env var, no hardcoded default.
+  change it. **Fix:** require `DB_PASSWORD` env var, no hardcoded default. (SKIPPED)
 
 - [ ] **No TLS** — Shell port is plain HTTP. Fine for isolated Mac mini, problem on shared
   networks. **Fix:** document reverse proxy requirement (nginx/Caddy) in README.
@@ -186,16 +190,16 @@ examples/clawbot-base/
 ### P2 — Before sharing with others
 
 - [ ] **Shell injection in provisioning scripts** — `<name>` param must be validated to
-  `[a-z0-9-]` only before use in shell commands or YAML generation.
+  `[a-z0-9-]` only before use in shell commands or YAML generation. (SKIPPED)
 
-- [ ] **No rate limiting on `/v1/execute`** — runaway agent can exhaust downstream API
+- [x] **No rate limiting on `/v1/execute`** — runaway agent can exhaust downstream API
   rate limits or DoS the Shell. **Fix:** per-crab rate limit (e.g. 60 req/min).
 
-- [ ] **No request timeout on outbound calls** — slow upstream hangs connection indefinitely.
+- [x] **No request timeout on outbound calls** — slow upstream hangs connection indefinitely.
   **Fix:** 30s timeout on undici requests.
 
 - [ ] **No token rotation** — tokens are permanent until manually revoked. No expiry.
-  **Fix:** optional `expiresAt` field on crabs table, checked in `requireCrab`.
+  **Fix:** optional `expiresAt` field on crabs table, checked in `requireCrab`. (SKIPPED)
 
 ### P3 — Known tradeoffs, document only
 

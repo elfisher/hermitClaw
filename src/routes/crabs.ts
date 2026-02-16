@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { db } from '../lib/db.js';
+import { requireAdmin } from '../lib/auth.js';
 
 export async function crabsRoutes(app: FastifyInstance) {
   /**
@@ -11,7 +12,7 @@ export async function crabsRoutes(app: FastifyInstance) {
    */
   app.post<{
     Body: { name: string };
-  }>('/v1/crabs', async (request, reply) => {
+  }>('/v1/crabs', { preHandler: [requireAdmin] }, async (request, reply) => {
     const { name } = request.body;
 
     if (!name) {
@@ -43,7 +44,7 @@ export async function crabsRoutes(app: FastifyInstance) {
    * GET /v1/crabs
    * List all registered agents. Never returns tokens.
    */
-  app.get('/v1/crabs', async (_request, reply) => {
+  app.get('/v1/crabs', { preHandler: [requireAdmin] }, async (_request, reply) => {
     const crabs = await db.crab.findMany({
       select: {
         id: true,
@@ -65,7 +66,7 @@ export async function crabsRoutes(app: FastifyInstance) {
    */
   app.patch<{
     Params: { id: string };
-  }>('/v1/crabs/:id/revoke', async (request, reply) => {
+  }>('/v1/crabs/:id/revoke', { preHandler: [requireAdmin] }, async (request, reply) => {
     const { id } = request.params;
 
     const crab = await db.crab.findUnique({ where: { id } });

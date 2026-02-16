@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { request as undiciRequest } from 'undici';
+import fastifyRateLimit from '@fastify/rate-limit';
 import { db } from '../lib/db.js';
 import { decryptPearl } from '../lib/crypto.js';
 import { injectCredential } from '../lib/injector.js';
 import { requireCrab } from '../lib/auth.js';
+import { isSafeUrl } from '../lib/ssrf.js';
 import type { AuthType } from '../lib/injector.js';
 
 interface ExecuteBody {
@@ -16,6 +18,14 @@ interface ExecuteBody {
 }
 
 export async function executeRoutes(app: FastifyInstance) {
+  await app.register(fastifyRateLimit, {
+    max: 60,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return request.crab?.id ?? request.ip;
+    },
+  });
+
   /**
    * POST /v1/execute
    *
@@ -42,14 +52,7 @@ export async function executeRoutes(app: FastifyInstance) {
       }
 
       // Validate URL to prevent SSRF against internal services
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(url);
-      } catch {
-        return reply.status(400).send({ error: 'Invalid URL' });
-      }
-
-      if (parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1' || parsedUrl.hostname.endsWith('.internal')) {
+      if (!(await isSafeUrl(url))) {
         return reply.status(400).send({ error: 'Requests to internal addresses are not allowed' });
       }
 
@@ -61,6 +64,22 @@ export async function executeRoutes(app: FastifyInstance) {
       if (!pearl) {
         await logTide({ crabId: crab.id, url, method, error: `No credential found for service: ${service}` });
         return reply.status(404).send({ error: `No credential found for service "${service}". Register it via POST /v1/secrets.` });
+      }
+
+      // Check if the tool is allowed
+      if (crab.allowedTools && Array.isArray(crab.allowedTools)) {
+        const isAllowed = crab.allowedTools.some((tool: any) => {
+          if (typeof tool === 'object' && tool !== null && 'url' in tool && 'method' in tool) {
+            const urlRegex = new RegExp(tool.url);
+            return urlRegex.test(url) && tool.method === method;
+          }
+          return false;
+        });
+
+        if (!isAllowed) {
+          await logTide({ crabId: crab.id, url, method, error: 'Tool not allowed' });
+          return reply.status(403).send({ error: 'Tool not allowed' });
+        }
       }
 
       let secret: string;
@@ -86,12 +105,19 @@ export async function executeRoutes(app: FastifyInstance) {
       let responseBody: string;
 
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+          controller.abort();
+        }, 30000);
+
         const { statusCode: code, body } = await undiciRequest(finalUrl, {
           method: method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
           headers,
           body: requestBody ? JSON.stringify(requestBody) : undefined,
+          signal: controller.signal,
         });
 
+        clearTimeout(timeout);
         statusCode = code;
         responseBody = await body.text();
       } catch (err) {

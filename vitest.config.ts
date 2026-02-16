@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    env: {
+      ADMIN_API_KEY: 'test-admin-key',
+      DATABASE_URL: 'postgresql://hermit:securepass@localhost:5432/hermitclaw_test',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { db } from '../lib/db.js';
 import { encryptPearl, decryptPearl } from '../lib/crypto.js';
+import { requireAdmin } from '../lib/auth.js';
 
 export async function secretsRoutes(app: FastifyInstance) {
   /**
@@ -17,7 +18,7 @@ export async function secretsRoutes(app: FastifyInstance) {
       plaintext: string;
       label?: string;
     };
-  }>('/v1/secrets', async (request, reply) => {
+  }>('/v1/secrets', { preHandler: [requireAdmin] }, async (request, reply) => {
     const { crabId, service, plaintext, label } = request.body;
 
     if (!crabId || !service || !plaintext) {
@@ -67,7 +68,7 @@ export async function secretsRoutes(app: FastifyInstance) {
    */
   app.get<{
     Querystring: { crabId?: string };
-  }>('/v1/secrets', async (request, reply) => {
+  }>('/v1/secrets', { preHandler: [requireAdmin] }, async (request, reply) => {
     const { crabId } = request.query;
 
     const pearls = await db.pearl.findMany({
@@ -93,7 +94,7 @@ export async function secretsRoutes(app: FastifyInstance) {
    */
   app.delete<{
     Params: { id: string };
-  }>('/v1/secrets/:id', async (request, reply) => {
+  }>('/v1/secrets/:id', { preHandler: [requireAdmin] }, async (request, reply) => {
     const { id } = request.params;
 
     const pearl = await db.pearl.findUnique({ where: { id } });
