@@ -236,6 +236,16 @@ HermitClaw isolates agents from the internet, not from each other or from other 
 
 ---
 
+## Deployment Considerations (TLS/Reverse Proxy)
+
+For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the HermitClaw Shell.
+
+The HermitClaw Shell operates over plain HTTP. While this is acceptable for communication internal to a physically secure host, exposing plain HTTP over a network (even a local home network) can allow attackers to snoop on or tamper with traffic, including sensitive API keys and other data.
+
+A reverse proxy configured with a valid SSL/TLS certificate will encrypt all traffic between clients (e.g., your browser accessing the Tide Pool UI, or agents on other hosts communicating with the Shell) and the HermitClaw server, providing confidentiality and integrity.
+
+---
+
 ## Development
 
 ```bash
@@ -272,7 +282,7 @@ npm run db:studio
 
 ### Planned
 
-- [ ] **Security hardening (P1)** — Document TLS/reverse proxy requirement
+- [x] **Security hardening (P1)** — Document TLS/reverse proxy requirement
 - [ ] **Security hardening (P2)** — Shell injection in provisioning scripts (`<name>` param validation)
 - [ ] **Phase 4** — Python example agent: minimal clawbot that uses HermitClaw to call GitHub and Slack
 - [ ] **Phase 5** — Ingress routing: Signal / WhatsApp → agent webhook dispatch (post-MVP)
