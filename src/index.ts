@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import { crabsRoutes } from './routes/crabs.js';
+import { secretsRoutes } from './routes/secrets.js';
 
 const server = Fastify({
   logger: {
@@ -13,6 +15,10 @@ const server = Fastify({
 server.get('/health', async () => {
   return { status: 'ok', service: 'hermitclaw', version: '0.1.0' };
 });
+
+// Routes
+await server.register(crabsRoutes);
+await server.register(secretsRoutes);
 
 const start = async () => {
   try {

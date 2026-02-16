@@ -6,8 +6,8 @@
 
 ## Current State
 
-**Active Phase:** Phase 1 — Crypto + Vault (not started)
-**Last Session:** `001-phase-0-scaffold`
+**Active Phase:** Phase 2 — Execute Gateway (not started)
+**Last Session:** `002-phase-1-crypto-vault`
 **Build status:** `tsc` compiles clean. Docker not yet verified (requires Docker daemon).
 
 ---
@@ -24,7 +24,7 @@ Full plan: [`PLAN.md`](../PLAN.md)
 ## Phase Checklist
 
 - [x] **Phase 0 — Repo Scaffold** — complete (`001-phase-0-scaffold.md`)
-- [ ] **Phase 1 — Crypto + Vault** — not started
+- [x] **Phase 1 — Crypto + Vault** — complete (`002-phase-1-crypto-vault.md`)
 - [ ] **Phase 2 — Execute Gateway** — not started (MVP core)
 - [ ] **Phase 3 — Python Example Agent** — not started
 - [ ] **Phase 4 — Tide Pool UI** — not started
@@ -34,17 +34,18 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ## What To Do Next
 
-Start **Phase 1 — Crypto + Vault**:
+Start **Phase 2 — Execute Gateway** (the MVP core):
 
-1. Initialize Prisma: `npx prisma init`
-2. Write schema (`prisma/schema.prisma`): tables `crabs`, `pearls`, `tides`, `routes`
-3. Implement `src/lib/crypto.ts` — AES-256-GCM `encryptPearl` / `decryptPearl`
-4. Implement `src/lib/db.ts` — Prisma client singleton
-5. Create secrets API routes:
-   - `POST /v1/secrets` — store encrypted credential for an agent
-   - `GET /v1/secrets` — list secrets (keys only, no plaintext values)
-6. Run migration: `npm run db:migrate`
-7. Verify: store a secret via curl, confirm DB row is encrypted
+1. Add agent auth middleware — validate `Authorization: Bearer <token>` against `crabs` table, reject if `active: false`
+2. Implement `POST /v1/execute` (`src/routes/execute.ts`):
+   - Look up pearl for `{ crabId, service }`, decrypt with `decryptPearl`
+   - Inject credential into outbound request (support `Bearer`, `Basic`, `Header`, `QueryParam`)
+   - Execute HTTP call via `undici`
+   - Write audit record to `tides` table (request + sanitized response)
+   - Return response JSON to agent
+3. Verify: register a crab, store a pearl, call `/v1/execute` → real API responds → logged in `tides`
+
+> **Important:** Run `prisma generate` once Docker/DB is up: `npm run db:generate` then `npm run db:migrate`
 
 ---
 
@@ -53,12 +54,19 @@ Start **Phase 1 — Crypto + Vault**:
 ```
 hermitClaw/
 ├── src/
-│   └── index.ts          # Fastify entry point, /health route
+│   ├── index.ts          # Fastify entry point, /health route
+│   ├── routes/
+│   │   ├── crabs.ts      # Agent registration + kill switch
+│   │   └── secrets.ts    # Encrypted credential CRUD
+│   └── lib/
+│       ├── crypto.ts     # AES-256-GCM encrypt/decrypt
+│       └── db.ts         # Prisma client singleton
 ├── web/                  # Empty — Phase 4
 ├── examples/             # Empty — Phase 3
 │   └── python_bot/
 ├── infra/                # Empty — future k8s/terraform
-├── prisma/               # Does not exist yet — Phase 1
+├── prisma/
+│   └── schema.prisma     # crabs, pearls, tides, routes tables
 ├── dist/                 # Compiled output (gitignored)
 ├── Dockerfile
 ├── docker-compose.yml

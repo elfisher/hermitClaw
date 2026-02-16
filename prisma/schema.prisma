@@ -1,0 +1,88 @@
+// HermitClaw — Prisma Schema
+// The Pearl Vault database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------
+// Crabs — registered agents
+// -----------------------------------------------
+model Crab {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  token     String   @unique  // Bearer token the agent presents
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pearls Pearl[]
+  tides  Tide[]
+
+  @@map("crabs")
+}
+
+// -----------------------------------------------
+// Pearls — encrypted credentials
+// -----------------------------------------------
+model Pearl {
+  id            String   @id @default(cuid())
+  crabId        String
+  service       String   // e.g. "github", "slack"
+  label         String?  // human-readable description
+  encryptedBlob String   // AES-256-GCM ciphertext (hex)
+  iv            String   // initialization vector (hex)
+  authTag       String   // GCM auth tag (hex)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  crab Crab @relation(fields: [crabId], references: [id], onDelete: Cascade)
+
+  @@unique([crabId, service])
+  @@map("pearls")
+}
+
+// -----------------------------------------------
+// Tides — audit log of all traffic
+// -----------------------------------------------
+model Tide {
+  id           String   @id @default(cuid())
+  crabId       String?
+  direction    Direction
+  tool         String?  // e.g. "github_star"
+  targetUrl    String?
+  statusCode   Int?
+  requestBody  String?  // sanitized
+  responseBody String?  // sanitized
+  error        String?
+  createdAt    DateTime @default(now())
+
+  crab Crab? @relation(fields: [crabId], references: [id], onDelete: SetNull)
+
+  @@map("tides")
+}
+
+// -----------------------------------------------
+// Routes — ingress routing rules
+// -----------------------------------------------
+model Route {
+  id          String   @id @default(cuid())
+  provider    String   // e.g. "signal", "whatsapp"
+  matchPrefix String   // e.g. "@supportbot"
+  targetCrab  String   // container name to forward to
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("routes")
+}
+
+enum Direction {
+  EGRESS   // agent → shell → internet
+  INGRESS  // internet → shell → agent
+}
