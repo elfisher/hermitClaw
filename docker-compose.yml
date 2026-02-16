@@ -1,0 +1,50 @@
+services:
+  # --- THE HERMITCLAW INFRASTRUCTURE ---
+
+  # 1. The Shell (Gateway + UI)
+  hermit_shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hermit_shell
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://hermit:securepass@hermit_db:5432/hermitclaw
+      - MASTER_PEARL=${MASTER_PEARL}
+      - NODE_ENV=production
+    depends_on:
+      hermit_db:
+        condition: service_healthy
+    networks:
+      - sand_bed
+      - open_ocean
+
+  # 2. The Pearl Vault (DB)
+  hermit_db:
+    image: postgres:16-alpine
+    container_name: hermit_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hermit
+      POSTGRES_PASSWORD: securepass
+      POSTGRES_DB: hermitclaw
+    volumes:
+      - hermit_data:/var/lib/postgresql/data
+    networks:
+      - open_ocean
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermit -d hermitclaw"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  sand_bed:
+    internal: true   # STRICT ISOLATION — no internet access
+  open_ocean:
+    driver: bridge   # Internet access
+
+volumes:
+  hermit_data:
