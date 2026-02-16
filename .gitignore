@@ -9,6 +9,8 @@ node_modules/
 # Build output
 dist/
 build/
+web/dist/
+web/node_modules/
 
 # Logs
 *.log

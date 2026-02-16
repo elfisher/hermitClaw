@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** Phase 3 — Tide Pool UI (not started)
-**Last Session:** `004-testing-strategy`
-**Build status:** `tsc` compiles clean. 53/53 tests passing. Docker not yet verified (requires Docker daemon).
+**Active Phase:** Phase 4 — Python Example Agent (not started)
+**Last Session:** `005-phase-3-tide-pool-ui`
+**Build status:** `tsc` clean. Vite build clean. 53/53 tests passing. Docker not yet verified (requires Docker daemon).
 
 ---
 
@@ -26,7 +26,7 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Phase 0 — Repo Scaffold** — complete (`001-phase-0-scaffold.md`)
 - [x] **Phase 1 — Crypto + Vault** — complete (`002-phase-1-crypto-vault.md`)
 - [x] **Phase 2 — Execute Gateway** — complete (`003-phase-2-execute-gateway.md`)
-- [ ] **Phase 3 — Tide Pool UI** — not started *(swapped with Python example — UI makes system operable sooner)*
+- [x] **Phase 3 — Tide Pool UI** — complete (`005-phase-3-tide-pool-ui.md`)
 - [ ] **Phase 4 — Python Example Agent** — not started
 - [ ] **Phase 5 — Ingress Routing** — deferred (post-MVP)
 
