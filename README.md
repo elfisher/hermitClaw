@@ -268,9 +268,12 @@ npm run db:studio
 
 ### In Progress
 
+- [ ] **Clawbot provisioning** — `clawbots.yml` config, three workspace modes, `scripts/clawbot-add.sh` / `clawbot-remove.sh` / `clawbots-sync.sh`, auto-generated `docker-compose.clawbots.yml`
+
+### Planned
+
 - [ ] **Security hardening (P1)** — Document TLS/reverse proxy requirement
 - [ ] **Security hardening (P2)** — Shell injection in provisioning scripts (`<name>` param validation)
-- [ ] **Clawbot provisioning** — `clawbots.yml` config, three workspace modes, `scripts/clawbot-add.sh` / `clawbot-remove.sh` / `clawbots-sync.sh`, auto-generated `docker-compose.clawbots.yml`
 - [ ] **Phase 4** — Python example agent: minimal clawbot that uses HermitClaw to call GitHub and Slack
 - [ ] **Phase 5** — Ingress routing: Signal / WhatsApp → agent webhook dispatch (post-MVP)
 - [ ] **Phase 6 — Activity Monitor** — Real-time agent activity feed in the Tide Pool UI. Live stream of in-flight and recent requests per agent, timeline view, anomaly highlighting (unusual target URLs, spike in request rate, error bursts), per-agent activity summary cards.
