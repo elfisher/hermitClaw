@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { crabsRoutes } from './routes/crabs.js';
 import { secretsRoutes } from './routes/secrets.js';
+import { executeRoutes } from './routes/execute.js';
 
 const server = Fastify({
   logger: {
@@ -19,6 +20,7 @@ server.get('/health', async () => {
 // Routes
 await server.register(crabsRoutes);
 await server.register(secretsRoutes);
+await server.register(executeRoutes);
 
 const start = async () => {
   try {

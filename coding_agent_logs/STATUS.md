@@ -6,8 +6,8 @@
 
 ## Current State
 
-**Active Phase:** Phase 2 — Execute Gateway (not started)
-**Last Session:** `002-phase-1-crypto-vault`
+**Active Phase:** Phase 3 — Tide Pool UI (not started)
+**Last Session:** `003-phase-2-execute-gateway`
 **Build status:** `tsc` compiles clean. Docker not yet verified (requires Docker daemon).
 
 ---
@@ -25,27 +25,32 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 - [x] **Phase 0 — Repo Scaffold** — complete (`001-phase-0-scaffold.md`)
 - [x] **Phase 1 — Crypto + Vault** — complete (`002-phase-1-crypto-vault.md`)
-- [ ] **Phase 2 — Execute Gateway** — not started (MVP core)
-- [ ] **Phase 3 — Python Example Agent** — not started
-- [ ] **Phase 4 — Tide Pool UI** — not started
+- [x] **Phase 2 — Execute Gateway** — complete (`003-phase-2-execute-gateway.md`)
+- [ ] **Phase 3 — Tide Pool UI** — not started *(swapped with Python example — UI makes system operable sooner)*
+- [ ] **Phase 4 — Python Example Agent** — not started
 - [ ] **Phase 5 — Ingress Routing** — deferred (post-MVP)
 
 ---
 
 ## What To Do Next
 
-Start **Phase 2 — Execute Gateway** (the MVP core):
+Start **Phase 3 — Tide Pool UI** (React dashboard):
 
-1. Add agent auth middleware — validate `Authorization: Bearer <token>` against `crabs` table, reject if `active: false`
-2. Implement `POST /v1/execute` (`src/routes/execute.ts`):
-   - Look up pearl for `{ crabId, service }`, decrypt with `decryptPearl`
-   - Inject credential into outbound request (support `Bearer`, `Basic`, `Header`, `QueryParam`)
-   - Execute HTTP call via `undici`
-   - Write audit record to `tides` table (request + sanitized response)
-   - Return response JSON to agent
-3. Verify: register a crab, store a pearl, call `/v1/execute` → real API responds → logged in `tides`
+1. Scaffold React + Vite app in `web/`
+2. Build pages:
+   - **Agents** — list crabs, register new agent, kill switch (PATCH revoke)
+   - **Secrets** — list pearls per agent, add/delete secrets
+   - **Audit Log** — paginated view of `tides` table
+3. Wire Fastify to serve `web/dist` statically via `@fastify/static` on `GET /`
+4. Verify: full secret CRUD via UI, kill switch revokes agent access
 
 > **Important:** Run `prisma generate` once Docker/DB is up: `npm run db:generate` then `npm run db:migrate`
+
+> **Deferred hardening for execute route (from session 003):**
+> - Block private IP ranges in SSRF guard (10.x, 172.16.x, 192.168.x)
+> - Per-crab rate limiting
+> - Request timeout on undici calls (~30s)
+> - Fastify JSON Schema validation on request bodies
 
 ---
 
@@ -57,10 +62,13 @@ hermitClaw/
 │   ├── index.ts          # Fastify entry point, /health route
 │   ├── routes/
 │   │   ├── crabs.ts      # Agent registration + kill switch
-│   │   └── secrets.ts    # Encrypted credential CRUD
+│   │   ├── secrets.ts    # Encrypted credential CRUD
+│   │   └── execute.ts    # POST /v1/execute — the gateway
 │   └── lib/
+│       ├── auth.ts       # requireCrab prehandler
 │       ├── crypto.ts     # AES-256-GCM encrypt/decrypt
-│       └── db.ts         # Prisma client singleton
+│       ├── db.ts         # Prisma client singleton
+│       └── injector.ts   # Credential injection strategies
 ├── web/                  # Empty — Phase 4
 ├── examples/             # Empty — Phase 3
 │   └── python_bot/
