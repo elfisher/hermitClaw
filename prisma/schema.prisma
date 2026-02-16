@@ -14,12 +14,13 @@ datasource db {
 // Crabs — registered agents
 // -----------------------------------------------
 model Crab {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  token     String   @unique  // Bearer token the agent presents
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String    @unique
+  token     String    @unique  // Bearer token the agent presents
+  expiresAt DateTime?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   pearls Pearl[]
   tides  Tide[]

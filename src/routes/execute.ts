@@ -121,6 +121,10 @@ export async function executeRoutes(app: FastifyInstance) {
         statusCode = code;
         responseBody = await body.text();
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          await logTide({ crabId: crab.id, url, method, error: 'Upstream request timed out' });
+          return reply.status(504).send({ error: 'Upstream request timed out' });
+        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         await logTide({ crabId: crab.id, url, method, error: message });
         return reply.status(502).send({ error: `Upstream request failed: ${message}` });

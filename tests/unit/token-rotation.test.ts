@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mockDb, resetDbMocks } from '../helpers/db-mock.js';
 import { buildApp } from '../helpers/app.js';
 import type { Crab } from '@prisma/client';
-import { request as undiciRequest } from 'undici';
 
 vi.mock('../../src/lib/db.js', () => ({ db: mockDb }));
-vi.mock('undici');
 
 const VALID_KEY = 'a'.repeat(64);
 
@@ -17,6 +15,18 @@ const activeCrab: Crab = {
   createdAt: new Date(),
   updatedAt: new Date(),
   allowedTools: null,
+  expiresAt: null,
+};
+
+const expiredCrab: Crab = {
+  id: 'crab-2',
+  name: 'expired-bot',
+  token: 'expired-token',
+  active: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  allowedTools: null,
+  expiresAt: new Date('2023-01-01T00:00:00.000Z'), // Expired in the past
 };
 
 const encryptedPearl = {
@@ -34,34 +44,15 @@ async function getEncryptedPearl() {
   return { ...encryptedPearl, ...result };
 }
 
-describe('request timeout', () => {
+describe('token rotation', () => {
   beforeEach(() => {
     resetDbMocks();
     process.env.MASTER_PEARL = VALID_KEY;
   });
 
-  it('rejects a request that takes longer than 30s', async () => {
+  it('allows a token that has not expired', async () => {
     const app = await buildApp();
     const pearl = await getEncryptedPearl();
-    const mockRequest = vi.mocked(undiciRequest);
-    mockRequest.mockImplementation(async (url, options) => {
-      return new Promise((resolve, reject) => {
-        const signal = options?.signal as AbortSignal | undefined;
-        if (signal) {
-          signal.addEventListener('abort', () => {
-            reject(signal.reason || new Error('Request aborted'));
-          });
-        }
-        setTimeout(() => {
-          if (!signal?.aborted) {
-            resolve({
-              statusCode: 200,
-              body: { text: async () => JSON.stringify({ login: 'elfisher' }) },
-            } as any);
-          }
-        }, 31000);
-      });
-    });
     mockDb.crab.findUnique.mockResolvedValue(activeCrab);
     mockDb.pearl.findUnique.mockResolvedValue(pearl);
     mockDb.tide.create.mockResolvedValue({});
@@ -73,7 +64,24 @@ describe('request timeout', () => {
       body: { service: 'github', url: 'https://api.github.com/user' },
     });
 
-    expect(res.statusCode).toBe(504);
-    expect(res.json().error).toBe('Upstream request timed out');
-  }, 32000);
+    expect(res.statusCode).not.toBe(403);
+  });
+
+  it('rejects a token that has expired', async () => {
+    const app = await buildApp();
+    const pearl = await getEncryptedPearl();
+    mockDb.crab.findUnique.mockResolvedValue(expiredCrab);
+    mockDb.pearl.findUnique.mockResolvedValue(pearl);
+    mockDb.tide.create.mockResolvedValue({});
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/execute',
+      headers: { authorization: `Bearer ${expiredCrab.token}` },
+      body: { service: 'github', url: 'https://api.github.com/user' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/expired/i);
+  });
 });

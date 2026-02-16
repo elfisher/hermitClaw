@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     env: {
       ADMIN_API_KEY: 'test-admin-key',
-      DATABASE_URL: 'postgresql://hermit:securepass@localhost:5432/hermitclaw_test',
+      DATABASE_URL: 'postgresql://hermit:securepass@localhost:5432/hermitclaw',
     },
     coverage: {
       provider: 'v8',

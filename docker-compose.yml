@@ -26,9 +26,11 @@ services:
     image: postgres:16-alpine
     container_name: hermit_db
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: hermit
-      POSTGRES_PASSWORD: securepass
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: hermitclaw
     volumes:
       - hermit_data:/var/lib/postgresql/data

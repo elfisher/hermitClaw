@@ -64,5 +64,9 @@ export async function requireCrab(
     return reply.status(403).send({ error: `Agent "${crab.name}" has been revoked` });
   }
 
+  if (crab.expiresAt && crab.expiresAt < new Date()) {
+    return reply.status(403).send({ error: `Agent "${crab.name}" token has expired` });
+  }
+
   request.crab = crab;
 }
