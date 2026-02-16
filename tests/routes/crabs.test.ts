@@ -5,7 +5,9 @@ import { buildApp } from '../helpers/app.js';
 vi.mock('../../src/lib/db.js', () => ({ db: mockDb }));
 
 describe('crabs routes', () => {
-  beforeEach(resetDbMocks);
+  beforeEach(() => {
+    resetDbMocks();
+  });
 
   describe('POST /v1/crabs', () => {
     it('creates an agent and returns a token', async () => {
@@ -23,6 +25,7 @@ describe('crabs routes', () => {
         method: 'POST',
         url: '/v1/crabs',
         body: { name: 'test-bot' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(201);
@@ -38,6 +41,7 @@ describe('crabs routes', () => {
         method: 'POST',
         url: '/v1/crabs',
         body: {},
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -56,6 +60,7 @@ describe('crabs routes', () => {
         method: 'POST',
         url: '/v1/crabs',
         body: { name: 'existing-bot' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(409);
@@ -71,7 +76,11 @@ describe('crabs routes', () => {
         { id: 'crab-2', name: 'bot-b', active: false, createdAt: new Date(), updatedAt: new Date() },
       ]);
 
-      const res = await app.inject({ method: 'GET', url: '/v1/crabs' });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/crabs',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(res.statusCode).toBe(200);
       const { crabs } = res.json();
@@ -85,7 +94,11 @@ describe('crabs routes', () => {
       const app = await buildApp();
       mockDb.crab.findMany.mockResolvedValue([]);
 
-      const res = await app.inject({ method: 'GET', url: '/v1/crabs' });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/crabs',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(res.statusCode).toBe(200);
       expect(res.json().crabs).toEqual([]);
@@ -106,6 +119,7 @@ describe('crabs routes', () => {
       const res = await app.inject({
         method: 'PATCH',
         url: '/v1/crabs/crab-1/revoke',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(200);
@@ -122,6 +136,7 @@ describe('crabs routes', () => {
       const res = await app.inject({
         method: 'PATCH',
         url: '/v1/crabs/nonexistent/revoke',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(404);

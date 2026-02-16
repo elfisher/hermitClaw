@@ -209,7 +209,7 @@ HermitClaw isolates agents from the internet, not from each other or from other 
 | Audit trail of tool calls | Yes |
 | Instant agent revocation | Yes |
 | Credential scope too broad | **No — limit at the source** |
-| Prompt injection → unintended destructive action | **Partial — allowedTools planned** |
+| Prompt injection → unintended destructive action | **Partial — allowedTools + Phase 7 Risk Scanner planned** |
 | Host OS / `.env` compromise | **No** |
 | Agent-to-agent lateral movement (same network) | **No** |
 
@@ -252,6 +252,8 @@ npm run db:studio
 - [ ] **Security hardening (P1)** — Complete SSRF guard (RFC-1918 ranges, IPv6, DNS rebinding); remove default DB password; document TLS/reverse proxy requirement
 - [ ] **Phase 4** — Python example agent: minimal clawbot that uses HermitClaw to call GitHub and Slack
 - [ ] **Phase 5** — Ingress routing: Signal / WhatsApp → agent webhook dispatch (post-MVP)
+- [ ] **Phase 6 — Activity Monitor** — Real-time agent activity feed in the Tide Pool UI. Live stream of in-flight and recent requests per agent, timeline view, anomaly highlighting (unusual target URLs, spike in request rate, error bursts), per-agent activity summary cards.
+- [ ] **Phase 7 — Risk Scanner** — Configurable inline scanning at the gateway. Classify outbound requests and inbound responses for risk before they execute or are returned to the agent. Block high-risk actions (e.g. DELETE requests to data services, bulk write operations) and high-risk responses (e.g. responses containing PII, credential-shaped strings, or anomalous payloads). Policy defined per agent or globally; violations logged and optionally alerted.
 
 ---
 

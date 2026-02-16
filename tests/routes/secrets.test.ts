@@ -29,6 +29,7 @@ describe('secrets routes', () => {
         method: 'POST',
         url: '/v1/secrets',
         body: { crabId: 'crab-1', service: 'github', plaintext: 'ghp_secret', label: 'GitHub token' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(201);
@@ -50,6 +51,7 @@ describe('secrets routes', () => {
         method: 'POST',
         url: '/v1/secrets',
         body: { crabId: 'crab-1' }, // missing service and plaintext
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(400);
@@ -63,6 +65,7 @@ describe('secrets routes', () => {
         method: 'POST',
         url: '/v1/secrets',
         body: { crabId: 'ghost', service: 'github', plaintext: 'token' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       expect(res.statusCode).toBe(404);
@@ -84,11 +87,13 @@ describe('secrets routes', () => {
         method: 'POST',
         url: '/v1/secrets',
         body: { crabId: 'crab-1', service: 'github', plaintext: 'first-token' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
       await app.inject({
         method: 'POST',
         url: '/v1/secrets',
         body: { crabId: 'crab-1', service: 'github', plaintext: 'updated-token' },
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
       });
 
       // upsert called twice, not create twice
@@ -103,7 +108,11 @@ describe('secrets routes', () => {
         { id: 'p-1', crabId: 'crab-1', service: 'github', label: null, createdAt: new Date(), updatedAt: new Date() },
       ]);
 
-      const res = await app.inject({ method: 'GET', url: '/v1/secrets' });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/secrets',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(res.statusCode).toBe(200);
       const { pearls } = res.json();
@@ -119,7 +128,11 @@ describe('secrets routes', () => {
       const app = await buildApp();
       mockDb.pearl.findMany.mockResolvedValue([]);
 
-      await app.inject({ method: 'GET', url: '/v1/secrets?crabId=crab-1' });
+      await app.inject({
+        method: 'GET',
+        url: '/v1/secrets?crabId=crab-1',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(mockDb.pearl.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { crabId: 'crab-1' } }),
@@ -130,7 +143,11 @@ describe('secrets routes', () => {
       const app = await buildApp();
       mockDb.pearl.findMany.mockResolvedValue([]);
 
-      await app.inject({ method: 'GET', url: '/v1/secrets' });
+      await app.inject({
+        method: 'GET',
+        url: '/v1/secrets',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(mockDb.pearl.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: undefined }),
@@ -144,7 +161,11 @@ describe('secrets routes', () => {
       mockDb.pearl.findUnique.mockResolvedValue({ id: 'pearl-1', crabId: 'crab-1', service: 'github' });
       mockDb.pearl.delete.mockResolvedValue({});
 
-      const res = await app.inject({ method: 'DELETE', url: '/v1/secrets/pearl-1' });
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/v1/secrets/pearl-1',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(res.statusCode).toBe(204);
       expect(mockDb.pearl.delete).toHaveBeenCalledWith({ where: { id: 'pearl-1' } });
@@ -154,7 +175,11 @@ describe('secrets routes', () => {
       const app = await buildApp();
       mockDb.pearl.findUnique.mockResolvedValue(null);
 
-      const res = await app.inject({ method: 'DELETE', url: '/v1/secrets/ghost' });
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/v1/secrets/ghost',
+        headers: { 'x-admin-api-key': process.env.ADMIN_API_KEY },
+      });
 
       expect(res.statusCode).toBe(404);
     });
