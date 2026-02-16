@@ -14,8 +14,6 @@ We take all security bugs in HermitClaw seriously. Thank you for improving the s
 
 To report a security vulnerability, please use the **"Report a vulnerability"** button on the [Security tab](https://github.com/elfisher/hermitClaw/security).
 
-You can also report a security vulnerability by sending an email to [eli.fisher@gmail.com](mailto:eli.fisher@gmail.com).
-
 Please include the following information in your report:
 
 - A description of the vulnerability and its impact.
