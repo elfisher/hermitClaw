@@ -210,7 +210,7 @@ A malicious prompt in a document, email, or web page can instruct a capable agen
 If an agent is authorized to send Slack messages, it can be manipulated into sending embarrassing or harmful ones. If it can write files, it can overwrite important ones. Authorization boundary enforcement is a necessary layer on top of HermitClaw, not a substitute for it.
 
 **Host-level compromise**
-`MASTER_PEARL` (the vault encryption key) lives in `.env` on the host. If the host is compromised, an attacker can read the key and decrypt all stored credentials. This is an inherent limitation of self-hosted encryption — there is no hardware security module (HSM) or key management service (KMS) in the current design. For a home server with physical security, this is an acceptable tradeoff. For a shared or cloud environment, use a secrets manager (Vault, AWS Secrets Manager) and do not commit `.env`.
+`MASTER_PEARL` (the vault encryption key) lives in `.env` on the host. If the host is compromised, an attacker can read the key and decrypt all stored credentials. This is an inherent limitation of self-hosted encryption — there is no hardware security module (HSM) or key management service (KMS) in the current design. For a home server with physical security, this is an acceptable tradeoff. For a shared or cloud environment, use a secrets manager (e.g. Vault) and do not commit `.env`.
 For best practices on securing your Mac mini host, see [docs/mac-mini-deployment.md](docs/mac-mini-deployment.md).
 
 **Network-internal threats**
