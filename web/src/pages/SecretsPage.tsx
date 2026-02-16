@@ -1,4 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  Box,
+  Button,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Chip,
+  CircularProgress,
+  TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Alert,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import { getAgents, getSecrets, createSecret, deleteSecret } from '../api/client.js';
 import type { Crab, Pearl } from '../api/types.js';
 
@@ -11,6 +34,7 @@ export function SecretsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ service: '', plaintext: '', label: '' });
   const [saving, setSaving] = useState(false);
+  const [pearlToDelete, setPearlToDelete] = useState<Pearl | null>(null);
 
   const loadAgents = useCallback(async () => {
     try {
@@ -40,8 +64,7 @@ export function SecretsPage() {
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => { loadSecrets(); }, [loadSecrets]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     if (!selectedCrabId || !form.service.trim() || !form.plaintext.trim()) return;
     setSaving(true);
     try {
@@ -61,10 +84,11 @@ export function SecretsPage() {
     }
   };
 
-  const handleDelete = async (pearl: Pearl) => {
-    if (!confirm(`Delete "${pearl.service}" credential? This cannot be undone.`)) return;
+  const handleDelete = async () => {
+    if (!pearlToDelete) return;
     try {
-      await deleteSecret(pearl.id);
+      await deleteSecret(pearlToDelete.id);
+      setPearlToDelete(null);
       await loadSecrets();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete secret');
@@ -72,136 +96,152 @@ export function SecretsPage() {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Secrets</h2>
-        <button
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ color: 'alabaster' }}>Secrets</Typography>
+        <Button
+          variant="contained"
+          sx={{ bgcolor: 'coral-red' }}
           onClick={() => setShowForm(true)}
           disabled={!selectedCrabId}
-          className="px-4 py-2 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-700 transition-colors disabled:opacity-40"
         >
           + Add Secret
-        </button>
-      </div>
+        </Button>
+      </Box>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+        <Alert severity="error" sx={{ mb: 4 }}>
           {error}
-        </div>
+        </Alert>
       )}
 
-      {/* Agent selector */}
-      <div className="mb-6">
-        <label className="block text-xs font-medium text-gray-500 mb-1">Agent</label>
-        <select
+      <FormControl sx={{ mb: 4, minWidth: 240 }}>
+        <InputLabel id="agent-select-label" sx={{ color: 'slate-gray' }}>Agent</InputLabel>
+        <Select
+          labelId="agent-select-label"
           value={selectedCrabId}
+          label="Agent"
           onChange={(e) => setSelectedCrabId(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400"
+          sx={{ color: 'alabaster', '.MuiOutlinedInput-notchedOutline': { borderColor: 'slate-gray' } }}
         >
-          {agents.length === 0 && <option value="">No agents registered</option>}
           {agents.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}{!a.active ? ' (revoked)' : ''}</option>
+            <MenuItem key={a.id} value={a.id}>{a.name}{!a.active ? ' (revoked)' : ''}</MenuItem>
           ))}
-        </select>
-      </div>
-
-      {/* Add secret form */}
-      {showForm && (
-        <form onSubmit={handleSave} className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50 space-y-3">
-          <p className="text-sm font-medium text-gray-700">New Secret</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Service name *</label>
-              <input
-                autoFocus
-                value={form.service}
-                onChange={(e) => setForm({ ...form, service: e.target.value })}
-                placeholder="e.g. github"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Label (optional)</label>
-              <input
-                value={form.label}
-                onChange={(e) => setForm({ ...form, label: e.target.value })}
-                placeholder="e.g. Personal GitHub token"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Secret value *</label>
-            <input
-              type="password"
-              value={form.plaintext}
-              onChange={(e) => setForm({ ...form, plaintext: e.target.value })}
-              placeholder="Paste your API key or token"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving || !form.service.trim() || !form.plaintext.trim()}
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded-md disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save Secret'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setForm({ service: '', plaintext: '', label: '' }); }}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
+        </Select>
+      </FormControl>
 
       {loading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+          <CircularProgress />
+        </Box>
       ) : !selectedCrabId ? (
-        <p className="text-sm text-gray-400">Register an agent first.</p>
+        <Typography sx={{ color: 'slate-gray', textAlign: 'center', mt: 8 }}>
+          Register an agent first.
+        </Typography>
       ) : secrets.length === 0 ? (
-        <p className="text-sm text-gray-400">No secrets stored for this agent.</p>
+        <Typography sx={{ color: 'slate-gray', textAlign: 'center', mt: 8 }}>
+          No secrets stored for this agent.
+        </Typography>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <th className="pb-2 pr-4">Service</th>
-              <th className="pb-2 pr-4">Label</th>
-              <th className="pb-2 pr-4">Value</th>
-              <th className="pb-2 pr-4">Updated</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+        <Table sx={{ bgcolor: 'midnight-blue', color: 'alabaster' }}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ color: 'slate-gray' }}>Service</TableCell>
+              <TableCell sx={{ color: 'slate-gray' }}>Label</TableCell>
+              <TableCell sx={{ color: 'slate-gray' }}>Value</TableCell>
+              <TableCell sx={{ color: 'slate-gray' }}>Updated</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {secrets.map((pearl) => (
-              <tr key={pearl.id}>
-                <td className="py-3 pr-4 font-mono text-gray-800">{pearl.service}</td>
-                <td className="py-3 pr-4 text-gray-500">{pearl.label ?? '—'}</td>
-                <td className="py-3 pr-4">
-                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded font-mono">
-                    ••••••••
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-gray-400 text-xs">
+              <TableRow key={pearl.id}>
+                <TableCell sx={{ color: 'alabaster', fontFamily: 'Roboto Mono' }}>{pearl.service}</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>{pearl.label ?? '—'}</TableCell>
+                <TableCell>
+                  <Chip label="••••••••" size="small" />
+                </TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>
                   {new Date(pearl.updatedAt).toLocaleDateString()}
-                </td>
-                <td className="py-3 text-right">
-                  <button
-                    onClick={() => handleDelete(pearl)}
-                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                </TableCell>
+                <TableCell align="right">
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={() => setPearlToDelete(pearl)}
                   >
                     Delete
-                  </button>
-                </td>
-              </tr>
+                  </Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
-    </div>
+
+      {/* Add Secret Dialog */}
+      <Dialog open={showForm} onClose={() => setShowForm(false)}>
+        <DialogTitle>Add New Secret</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter the details for the new secret. The secret value will be encrypted and stored securely.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Service Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={form.service}
+            onChange={(e) => setForm({ ...form, service: e.target.value })}
+          />
+          <TextField
+            margin="dense"
+            label="Label (optional)"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={form.label}
+            onChange={(e) => setForm({ ...form, label: e.target.value })}
+          />
+          <TextField
+            margin="dense"
+            label="Secret Value"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={form.plaintext}
+            onChange={(e) => setForm({ ...form, plaintext: e.target.value })}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowForm(false)}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving || !form.service.trim() || !form.plaintext.trim()}>
+            {saving ? <CircularProgress size={24} /> : 'Save Secret'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Secret Confirmation */}
+      <Dialog
+        open={!!pearlToDelete}
+        onClose={() => setPearlToDelete(null)}
+      >
+        <DialogTitle>Delete Secret?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete the secret for "{pearlToDelete?.service}"? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPearlToDelete(null)}>Cancel</Button>
+          <Button onClick={handleDelete} color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

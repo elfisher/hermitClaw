@@ -1,4 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  Box,
+  Button,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Chip,
+  CircularProgress,
+  TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Alert,
+  IconButton,
+} from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { getAgents, createAgent, revokeAgent } from '../api/client.js';
 import type { Crab, CrabWithToken } from '../api/types.js';
 
@@ -10,6 +31,7 @@ export function AgentsPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [newToken, setNewToken] = useState<CrabWithToken | null>(null);
+  const [agentToRevoke, setAgentToRevoke] = useState<Crab | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -25,8 +47,7 @@ export function AgentsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
     try {
@@ -42,128 +63,145 @@ export function AgentsPage() {
     }
   };
 
-  const handleRevoke = async (agent: Crab) => {
-    if (!confirm(`Revoke access for "${agent.name}"? This cannot be undone.`)) return;
+  const handleRevoke = async () => {
+    if (!agentToRevoke) return;
     try {
-      await revokeAgent(agent.id);
+      await revokeAgent(agentToRevoke.id);
+      setAgentToRevoke(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to revoke agent');
     }
   };
 
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setNewName('');
+  };
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Agents</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
-        >
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ color: 'alabaster' }}>Agents</Typography>
+        <Button variant="contained" sx={{ bgcolor: 'coral-red' }} onClick={() => setShowForm(true)}>
           + Register Agent
-        </button>
-      </div>
+        </Button>
+      </Box>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+        <Alert severity="error" sx={{ mb: 4 }}>
           {error}
-        </div>
+        </Alert>
       )}
 
-      {/* Token reveal — shown once after creation */}
       {newToken && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-md">
-          <p className="text-sm font-semibold text-amber-800 mb-1">
+        <Alert severity="success" sx={{ mb: 4 }} onClose={() => setNewToken(null)}>
+          <Typography variant="body2">
             Agent "{newToken.name}" registered. Copy this token — it won't be shown again.
-          </p>
-          <code className="block text-xs bg-amber-100 text-amber-900 p-2 rounded break-all font-mono">
-            {newToken.token}
-          </code>
-          <button
-            onClick={() => setNewToken(null)}
-            className="mt-2 text-xs text-amber-700 underline"
-          >
-            I've saved it, dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Register form */}
-      {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50 flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Agent name</label>
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. dev-bot"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating || !newName.trim()}
-            className="px-4 py-2 bg-gray-900 text-white text-sm rounded-md disabled:opacity-50"
-          >
-            {creating ? 'Registering…' : 'Register'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setShowForm(false); setNewName(''); }}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-        </form>
+          </Typography>
+          <Box sx={{ p: 1, my: 1, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 1 }}>
+            <Typography variant="mono" sx={{ wordBreak: 'break-all' }}>
+              {newToken.token}
+            </Typography>
+          </Box>
+        </Alert>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+          <CircularProgress />
+        </Box>
       ) : agents.length === 0 ? (
-        <p className="text-sm text-gray-400">No agents registered yet.</p>
+        <Typography sx={{ color: 'slate-gray', textAlign: 'center', mt: 8 }}>
+          No agents registered yet.
+        </Typography>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <th className="pb-2 pr-4">Name</th>
-              <th className="pb-2 pr-4">Status</th>
-              <th className="pb-2 pr-4">Registered</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+        <Table sx={{ bgcolor: 'midnight-blue', color: 'alabaster' }}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ color: 'slate-gray' }}>Name</TableCell>
+              <TableCell sx={{ color: 'slate-gray' }}>Status</TableCell>
+              <TableCell sx={{ color: 'slate-gray' }}>Registered</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {agents.map((agent) => (
-              <tr key={agent.id} className="py-2">
-                <td className="py-3 pr-4 font-mono text-gray-800">{agent.name}</td>
-                <td className="py-3 pr-4">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    agent.active
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${agent.active ? 'bg-green-500' : 'bg-red-500'}`} />
-                    {agent.active ? 'Active' : 'Revoked'}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-gray-400 text-xs">
+              <TableRow key={agent.id}>
+                <TableCell sx={{ color: 'alabaster', fontFamily: 'Roboto Mono' }}>{agent.name}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={agent.active ? 'Active' : 'Revoked'}
+                    color={agent.active ? 'success' : 'error'}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>
                   {new Date(agent.createdAt).toLocaleDateString()}
-                </td>
-                <td className="py-3 text-right">
+                </TableCell>
+                <TableCell align="right">
                   {agent.active && (
-                    <button
-                      onClick={() => handleRevoke(agent)}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium"
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => setAgentToRevoke(agent)}
                     >
                       Revoke
-                    </button>
+                    </Button>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
-    </div>
+
+      {/* Register Agent Dialog */}
+      <Dialog open={showForm} onClose={handleCloseForm}>
+        <DialogTitle>Register New Agent</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter a unique name for the new agent. The access token will be shown once upon creation.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Agent Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseForm}>Cancel</Button>
+          <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
+            {creating ? <CircularProgress size={24} /> : 'Register'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Revoke Agent Confirmation */}
+      <Dialog
+        open={!!agentToRevoke}
+        onClose={() => setAgentToRevoke(null)}
+      >
+        <DialogTitle>Revoke Agent Access?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to revoke access for agent "{agentToRevoke?.name}"? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAgentToRevoke(null)}>Cancel</Button>
+          <Button onClick={handleRevoke} color="error">
+            Revoke
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

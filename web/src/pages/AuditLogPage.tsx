@@ -1,18 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTides } from '../api/client.js';
-import type { Tide, Pagination } from '../api/types.js';
+import {
+  Box,
+  Button,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Chip,
+  CircularProgress,
+  Pagination,
+  Alert,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
+import { getTides, getAgents } from '../api/client.js';
+import type { Tide, Pagination as PaginationType, Crab } from '../api/types.js';
 
 export function AuditLogPage() {
   const [tides, setTides] = useState<Tide[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [pagination, setPagination] = useState<PaginationType | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<Crab[]>([]);
+  const [filter, setFilter] = useState({ agentId: '', statusCode: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getTides({ page, limit: 50 });
+      const data = await getTides({
+        page,
+        limit: 20,
+        crabId: filter.agentId || undefined,
+        statusCode: filter.statusCode ? Number(filter.statusCode) : undefined,
+      });
       setTides(data.tides);
       setPagination(data.pagination);
       setError(null);
@@ -21,109 +47,136 @@ export function AuditLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, filter]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadAgents = useCallback(async () => {
+    try {
+      setAgents(await getAgents());
+    } catch (e) {
+      // Non-critical, so we don't set a main error
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAgents();
+    load();
+  }, [load, loadAgents]);
 
   const statusColor = (code: number | null) => {
-    if (code === null) return 'text-gray-400';
-    if (code < 300) return 'text-green-600';
-    if (code < 400) return 'text-blue-600';
-    if (code < 500) return 'text-amber-600';
-    return 'text-red-600';
+    if (code === null) return 'default';
+    if (code >= 500) return 'error';
+    if (code >= 400) return 'warning';
+    if (code >= 300) return 'info';
+    return 'success';
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Audit Log</h2>
-        <button
-          onClick={load}
-          className="text-sm text-gray-500 hover:text-gray-700 underline"
-        >
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ color: 'alabaster' }}>Audit Log</Typography>
+        <Button variant="outlined" onClick={load} disabled={loading}>
           Refresh
-        </button>
-      </div>
+        </Button>
+      </Box>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+        <Alert severity="error" sx={{ mb: 4 }}>
           {error}
-        </div>
+        </Alert>
       )}
 
+      {/* Filter Bar */}
+      <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel id="agent-filter-label" sx={{ color: 'slate-gray' }}>Filter by Agent</InputLabel>
+          <Select
+            labelId="agent-filter-label"
+            value={filter.agentId}
+            label="Filter by Agent"
+            onChange={(e) => setFilter({ ...filter, agentId: e.target.value })}
+            sx={{ color: 'alabaster', '.MuiOutlinedInput-notchedOutline': { borderColor: 'slate-gray' } }}
+          >
+            <MenuItem value=""><em>All Agents</em></MenuItem>
+            {agents.map(agent => (
+              <MenuItem key={agent.id} value={agent.id}>{agent.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          label="Status Code"
+          variant="outlined"
+          value={filter.statusCode}
+          onChange={(e) => setFilter({ ...filter, statusCode: e.target.value })}
+          sx={{
+            input: { color: 'alabaster' },
+            label: { color: 'slate-gray' },
+            '.MuiOutlinedInput-notchedOutline': { borderColor: 'slate-gray' },
+          }}
+        />
+      </Box>
+
       {loading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+          <CircularProgress />
+        </Box>
       ) : tides.length === 0 ? (
-        <p className="text-sm text-gray-400">No activity recorded yet.</p>
+        <Typography sx={{ color: 'slate-gray', textAlign: 'center', mt: 8 }}>
+          No activity recorded yet.
+        </Typography>
       ) : (
         <>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <th className="pb-2 pr-3">Time</th>
-                <th className="pb-2 pr-3">Agent</th>
-                <th className="pb-2 pr-3">Direction</th>
-                <th className="pb-2 pr-3">Target</th>
-                <th className="pb-2 pr-3">Status</th>
-                <th className="pb-2">Error</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <Table sx={{ bgcolor: 'midnight-blue', color: 'alabaster' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ color: 'slate-gray' }}>Time</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>Agent</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>Direction</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>Target</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>Status</TableCell>
+                <TableCell sx={{ color: 'slate-gray' }}>Error</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {tides.map((tide) => (
-                <tr key={tide.id} className={tide.error ? 'bg-red-50' : ''}>
-                  <td className="py-2 pr-3 text-xs text-gray-400 whitespace-nowrap">
+                <TableRow key={tide.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                  <TableCell sx={{ color: 'slate-gray', whiteSpace: 'nowrap' }}>
                     {new Date(tide.createdAt).toLocaleTimeString()}
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-gray-700 text-xs">
-                    {tide.crab?.name ?? <span className="text-gray-400">—</span>}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      tide.direction === 'EGRESS'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-purple-100 text-purple-700'
-                    }`}>
-                      {tide.direction}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-gray-500 max-w-xs truncate font-mono">
+                  </TableCell>
+                  <TableCell sx={{ color: 'alabaster', fontFamily: 'Roboto Mono' }}>
+                    {tide.crab?.name ?? '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={tide.direction} size="small" />
+                  </TableCell>
+                  <TableCell sx={{ color: 'alabaster', fontFamily: 'Roboto Mono', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {tide.targetUrl ?? '—'}
-                  </td>
-                  <td className={`py-2 pr-3 text-xs font-mono font-semibold ${statusColor(tide.statusCode)}`}>
-                    {tide.statusCode ?? '—'}
-                  </td>
-                  <td className="py-2 text-xs text-red-500 max-w-xs truncate">
-                    {tide.error ?? ''}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell>
+                    {tide.statusCode ? (
+                      <Chip label={tide.statusCode} color={statusColor(tide.statusCode)} size="small" />
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell sx={{ color: 'crimson-red', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {tide.error}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
 
-          {/* Pagination */}
           {pagination && pagination.pages > 1 && (
-            <div className="mt-4 flex items-center gap-3 justify-end text-sm">
-              <span className="text-gray-400 text-xs">
-                {pagination.total} entries · page {pagination.page} of {pagination.pages}
-              </span>
-              <button
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-40 hover:bg-gray-50"
-              >
-                ← Prev
-              </button>
-              <button
-                disabled={page >= pagination.pages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-40 hover:bg-gray-50"
-              >
-                Next →
-              </button>
-            </div>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+              <Pagination
+                count={pagination.pages}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                color="primary"
+                sx={{ button: { color: 'alabaster' } }}
+              />
+            </Box>
           )}
         </>
       )}
-    </div>
+    </Box>
   );
 }
