@@ -443,7 +443,14 @@ export OLLAMA_HOST=0.0.0.0
 ```
 Then restart Ollama (quit the menu-bar app and relaunch, or restart the service).
 
-> **Security note:** `0.0.0.0` means Ollama is reachable from other devices on your local network, not just Docker. Ollama has no authentication. If you're on a shared or public network, add a macOS firewall rule to restrict port 11434 to localhost + Docker's subnet, or keep `OLLAMA_HOST=127.0.0.1` and only use HermitClaw in local (non-Docker) mode.
+> **Security note:** `0.0.0.0` exposes port 11434 to other devices on your local network. However, your agent containers are already protected by the architecture:
+>
+> - **Agent containers** live on `sand_bed` (`internal: true`) — Docker gives this network no default gateway, so agents have zero routing to `host.docker.internal` and cannot reach Ollama directly.
+> - **`POST /v1/execute`** targeting Ollama's IP is blocked by HermitClaw's SSRF guard (private IP ranges).
+> - **CONNECT proxy** tunnels to `host.docker.internal` can be blocked with a DENY rule in Network Rules.
+> - **`POST /v1/chat/completions`** (the model proxy) is the one intentional path — agents can call Ollama through HermitClaw, which is logged in the Audit Log.
+>
+> The real exposure from `0.0.0.0` is **other devices on your LAN**, not your own agents. On a trusted home network this is generally acceptable. On a shared or public network, restrict port 11434 with a macOS `pf` firewall rule, or keep `OLLAMA_HOST=127.0.0.1` and run HermitClaw locally (not in Docker) where `localhost:11434` is sufficient.
 
 ---
 
