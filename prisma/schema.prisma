@@ -14,13 +14,14 @@ datasource db {
 // Crabs — registered agents
 // -----------------------------------------------
 model Crab {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  token     String    @unique  // Bearer token the agent presents
-  expiresAt DateTime?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  name         String    @unique
+  token        String    @unique  // Bearer token the agent presents
+  expiresAt    DateTime?
+  active       Boolean   @default(true)
+  allowedTools Json?     // null = unrestricted; array of { url, method } objects
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   pearls Pearl[]
   tides  Tide[]
@@ -69,7 +70,7 @@ model Tide {
 }
 
 // -----------------------------------------------
-// Routes — ingress routing rules
+// Routes — ingress routing rules (Phase 8D)
 // -----------------------------------------------
 model Route {
   id          String   @id @default(cuid())
@@ -83,7 +84,83 @@ model Route {
   @@map("routes")
 }
 
+// -----------------------------------------------
+// ModelProvider — LLM backends (Phase 8A)
+// -----------------------------------------------
+model ModelProvider {
+  id          String        @id @default(cuid())
+  name        String        @unique // e.g. "ollama-local", "openai"
+  baseUrl     String        // e.g. "http://host.docker.internal:11434"
+  protocol    Protocol      @default(OPENAI)
+  pearlService String?      // if set, look up this pearl service name for the API key
+  scope       ProviderScope @default(GLOBAL)
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  access ModelProviderAccess[]
+
+  @@map("model_providers")
+}
+
+// -----------------------------------------------
+// ModelProviderAccess — join: RESTRICTED provider → crab (Phase 8A)
+// -----------------------------------------------
+model ModelProviderAccess {
+  id         String   @id @default(cuid())
+  providerId String
+  crabId     String
+  createdAt  DateTime @default(now())
+
+  provider ModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, crabId])
+  @@map("model_provider_access")
+}
+
+// -----------------------------------------------
+// ConnectRule — CONNECT proxy domain policy (Phase 8B)
+// -----------------------------------------------
+model ConnectRule {
+  id        String     @id @default(cuid())
+  domain    String     // e.g. "*.telegram.org", "api.openai.com"
+  action    RuleAction
+  crabId    String?    // null = global rule
+  priority  Int        @default(100)
+  note      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("connect_rules")
+}
+
+// -----------------------------------------------
+// SystemSetting — global key-value config (Phase 8B)
+// -----------------------------------------------
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
 enum Direction {
   EGRESS   // agent → shell → internet
   INGRESS  // internet → shell → agent
+}
+
+enum Protocol {
+  OPENAI     // OpenAI-compatible chat completions API
+  ANTHROPIC  // Anthropic messages API (future)
+}
+
+enum ProviderScope {
+  GLOBAL     // any crab can use this provider
+  RESTRICTED // only crabs in ModelProviderAccess can use it
+}
+
+enum RuleAction {
+  ALLOW
+  DENY
 }

@@ -39,3 +39,21 @@ export interface Pagination {
   total: number;
   pages: number;
 }
+
+// ── Phase 8A — Model Providers ──────────────────────────────────────────────
+
+export type Protocol = 'OPENAI' | 'ANTHROPIC';
+export type ProviderScope = 'GLOBAL' | 'RESTRICTED';
+
+export interface ModelProvider {
+  id: string;
+  name: string;
+  baseUrl: string;
+  protocol: Protocol;
+  pearlService: string | null;
+  scope: ProviderScope;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  access: { crabId: string }[];
+}

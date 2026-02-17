@@ -51,3 +51,19 @@ export async function isSafeUrl(url: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Check SSRF safety for admin-configured URLs (ModelProvider baseUrl, etc.).
+ * Admin-controlled URLs bypass the private-IP check because:
+ *   1. The agent never controls this URL — it's stored in the DB by an admin.
+ *   2. Local providers (Ollama on host.docker.internal) would otherwise be blocked.
+ * This is intentional and safe: only admins can write to model_providers.
+ */
+export async function isSafeAdminUrl(url: string): Promise<boolean> {
+  try {
+    new URL(url); // basic syntax check
+    return true;
+  } catch {
+    return false;
+  }
+}

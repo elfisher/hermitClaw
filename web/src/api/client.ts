@@ -1,4 +1,4 @@
-import type { Crab, CrabWithToken, Pearl, Tide, Pagination } from './types.js';
+import type { Crab, CrabWithToken, Pearl, Tide, Pagination, ModelProvider } from './types.js';
 
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
 
@@ -61,6 +61,57 @@ export async function createSecret(params: {
 
 export async function deleteSecret(id: string): Promise<void> {
   return apiFetch<void>(`/v1/secrets/${id}`, { method: 'DELETE' });
+}
+
+// ---- Model Providers ----
+
+export async function getProviders(): Promise<ModelProvider[]> {
+  const data = await apiFetch<{ providers: ModelProvider[] }>('/v1/providers');
+  return data.providers;
+}
+
+export async function createProvider(params: {
+  name: string;
+  baseUrl: string;
+  protocol?: 'OPENAI' | 'ANTHROPIC';
+  pearlService?: string;
+  scope?: 'GLOBAL' | 'RESTRICTED';
+}): Promise<ModelProvider> {
+  return apiFetch<ModelProvider>('/v1/providers', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function updateProvider(
+  id: string,
+  params: Partial<{
+    name: string;
+    baseUrl: string;
+    protocol: 'OPENAI' | 'ANTHROPIC';
+    pearlService: string;
+    scope: 'GLOBAL' | 'RESTRICTED';
+  }>,
+): Promise<ModelProvider> {
+  return apiFetch<ModelProvider>(`/v1/providers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function deleteProvider(id: string): Promise<void> {
+  return apiFetch<void>(`/v1/providers/${id}`, { method: 'DELETE' });
+}
+
+export async function grantProviderAccess(providerId: string, crabId: string): Promise<void> {
+  return apiFetch<void>(`/v1/providers/${providerId}/access`, {
+    method: 'POST',
+    body: JSON.stringify({ crabId }),
+  });
+}
+
+export async function revokeProviderAccess(providerId: string, crabId: string): Promise<void> {
+  return apiFetch<void>(`/v1/providers/${providerId}/access/${crabId}`, { method: 'DELETE' });
 }
 
 // ---- Audit Log (Tides) ----

@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** OpenClaw Integration — design complete, ready to build
-**Last Session:** `008-openclaw-integration-design`
-**Build status:** `tsc` clean. Vite build clean. 90/90 tests passing. Backend + DB running locally. Full stack verified working.
+**Active Phase:** Phase 8B — HTTP CONNECT Proxy + Domain Rules
+**Last Session:** `009-phase-8a-model-proxy`
+**Build status:** `tsc` clean (backend + frontend). 90/90 tests passing. Backend running locally. Phase 8A complete and smoke tested.
 
 ---
 
@@ -29,7 +29,7 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Phase 3 — Tide Pool UI** — complete (`005-phase-3-tide-pool-ui.md`)
 - [x] **Security Hardening (P0/P1/P2)** — complete (partial, see backlog below)
 - [x] **UI Overhaul (MUI)** — complete (`007-security-hardening.md`)
-- [ ] **Phase 8A — Model Proxy** — design complete (`008-openclaw-integration-design.md`), not yet built
+- [x] **Phase 8A — Model Proxy** — complete (`009-phase-8a-model-proxy`)
 - [ ] **Phase 8B — HTTP CONNECT Proxy** — design complete, not yet built
 - [ ] **Phase 8C — OpenClaw Provisioning** — design complete, not yet built
 - [ ] **Phase 8D — Inbound Routing** — deferred (was Phase 5)
@@ -42,10 +42,10 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ## What To Do Next
 
-**Build Phase 8A — Model Proxy.** Design is fully agreed. See "OpenClaw Integration Design"
-section below and full session at `008-openclaw-integration-design.md`.
+**Build Phase 8B — HTTP CONNECT Proxy + Domain Rules.**
+See PLAN.md Phase 8B checklist.
 
-**Suggested build order:** 8A (model proxy) → 8B (CONNECT proxy) → 8C (provisioning) → 8D (inbound)
+**Suggested build order:** 8B (CONNECT proxy) → 8C (provisioning) → 8D (inbound)
 
 ---
 
@@ -78,44 +78,43 @@ internet access. Everything is auditable and blockable at HermitClaw.
 |---|---|---|
 | LLM inference | App-layer proxy: `POST /v1/chat/completions` | Full request + response |
 | Outbound channel calls | HTTP CONNECT tunnel via `HTTP_PROXY` | Host + port only (HTTPS opaque) |
+| Agent web UI | Reverse proxy `/agents/:name/*` + WS passthrough | N/A (UI, not data) |
 | Inbound webhooks | HermitClaw ingress routing (Phase 8D, deferred) | Full |
 
-### Model Provider Data Model
+### New DB Tables (all phases)
 
-```
-ModelProvider: id, name, baseUrl, protocol (openai|anthropic), pearlService?
-```
+| Table | Purpose |
+|-------|---------|
+| `ModelProvider` | LLM backends (Ollama, OpenAI, Anthropic); `scope: GLOBAL\|RESTRICTED` |
+| `ModelProviderAccess` | Join table — which crabs can use RESTRICTED providers |
+| `ConnectRule` | Domain allow/deny rules for CONNECT proxy; priority-ordered, per-crab or global |
+| `SystemSetting` | Key-value global config (`connect_proxy_default`, `session_cookie_ttl_hours`) |
+| `Crab.uiPort` | Optional field — when set, Tide Pool shows "Open UI" button |
 
-`pearlService: null` = no auth (Ollama local). `pearlService: "openai"` = look up pearl
-for that service and inject as API key. Zero code changes to add new providers.
+### Agent Web UI Access
 
-### OpenClaw Config (openclaw.json)
+HermitClaw reverse-proxies each agent's web UI at `/agents/:name/*`. Includes WebSocket
+upgrade passthrough so OpenClaw's real-time chat works. OpenClaw stays on `sand_bed` with
+no published ports — full isolation preserved.
 
-```json
-{
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "hermitclaw": {
-        "baseUrl": "http://hermit_shell:3000/v1",
-        "apiKey": "${HERMITCLAW_TOKEN}",
-        "api": "openai-completions",
-        "models": [{ "id": "ollama/llama3.2", "name": "Llama 3.2 (local)" }]
-      }
-    }
-  }
-}
-```
+Browser auth uses a **signed session cookie** (HMAC-SHA256, 8h TTL, HttpOnly) set at Tide
+Pool login. Same cookie gates agent UI proxy routes. Resolves the deferred login screen TODO.
+
+### CONNECT Proxy Policy
+
+Configurable via `ConnectRule` table in Tide Pool UI. Rules are priority-ordered, support
+wildcards (`*.telegram.org`), and can be scoped to a specific crab or global. When no rule
+matches, `SystemSetting: connect_proxy_default` applies (`ALLOW` for dev, `DENY` for prod).
+
+### Provider Scope
+
+`ModelProvider.scope = GLOBAL` (any crab) or `RESTRICTED` (explicit access grant per crab).
+Use GLOBAL for local Ollama, RESTRICTED for expensive cloud providers (OpenAI, Anthropic).
 
 ### Ollama Placement
 
 Runs directly on Mac host (Apple Silicon unified memory). Reached from Docker via
-`host.docker.internal:11434`. Configured via `OLLAMA_BASE_URL` in `.env`.
-
-### Open Questions (decide before building 8B)
-
-- CONNECT proxy: **allowlist** (default deny) vs **denylist** (default allow)?
-- `ModelProvider` scope: **global** (any crab) vs **crab-scoped** (per agent)?
+`http://host.docker.internal:11434`. Configured via `OLLAMA_BASE_URL` in `.env`.
 
 ---
 

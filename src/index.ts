@@ -7,6 +7,7 @@ import { crabsRoutes } from './routes/crabs.js';
 import { secretsRoutes } from './routes/secrets.js';
 import { executeRoutes } from './routes/execute.js';
 import { tidesRoutes } from './routes/tides.js';
+import { modelRoutes } from './routes/model.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +30,7 @@ await server.register(crabsRoutes);
 await server.register(secretsRoutes);
 await server.register(executeRoutes);
 await server.register(tidesRoutes);
+await server.register(modelRoutes);
 
 // Serve Tide Pool UI (web/dist) if built
 const webDistPath = path.resolve(process.cwd(), 'web', 'dist');

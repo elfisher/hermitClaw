@@ -1,279 +1,299 @@
-# 🐚 Project: HermitClaw
+# HermitClaw — System Design
 
 > **Tagline:** A Hard Shell for Soft Agents.
-> **Status:** Design Phase
+> **Primary target:** OpenClaw agents on a self-hosted Mac mini.
 > **License:** MIT
+
+---
 
 ## 1. Executive Summary
 
-**HermitClaw** is a self-hosted, secure tool execution gateway and credential vault designed for OpenClaw agents ("Clawbots").
+**HermitClaw** is a self-hosted, secure gateway and credential vault for AI agents. It is the
+**sole broker** for everything an agent does: model API calls, outbound tool/API calls, web UI
+access, and inbound messaging webhooks. Agents are fully sandboxed — no direct internet access,
+no directly published ports, no credential exposure.
 
-AI Agents are prone to prompt injection and hallucination. They should never hold long-term credentials (API keys) or have unfettered internet access. **HermitClaw** acts as a secure intermediary (The Shell), holding the secrets (The Pearls) and executing tools on behalf of the sandboxed agent (The Crab).
+The primary integration target is **OpenClaw**, a popular open-source personal AI assistant
+framework. HermitClaw secures OpenClaw by sitting between it and the world.
 
 ---
 
-## 2. High-Level Architecture
+## 2. Mental Model
 
-The system enforces a **Zero-Trust Network Architecture** using Docker containers.
+| Component | Metaphor | Role |
+|-----------|---------|------|
+| **The Shell** (HermitClaw gateway) | The shell | The only thing with access to the outside world. Validates, brokers, logs everything. |
+| **The Pearl Vault** (PostgreSQL) | The pearl | Encrypted credentials, only accessible by the Shell. |
+| **The Crab** (Agent container) | The crab | Lives inside the shell. Cannot act without it. |
+| **The Tide Pool** (Web UI) | The tide pool | Human control plane for managing agents, secrets, providers, and policy. |
 
-### The Mental Model
+---
 
-* **The Crab (Agent):** Lives in a strictly internal network (`sand_bed`). It has **no internet access**. It can only talk to The Shell.
-* **The Shell (Gateway):** The only component that bridges the internal network and the outside world (`open_ocean`). It validates requests, injects credentials, and logs activity.
-* **The Pearl (Vault):** An encrypted PostgreSQL database accessible *only* by The Shell.
-* **The Tide Pool (UI):** A web dashboard for humans to manage secrets and view logs.
+## 3. High-Level Architecture
 
-### Network Topology Diagram
-
-```mermaid
-graph TD
-    subgraph "Host Machine"
-        subgraph "Network: sand_bed (Internal/No Internet)"
-            Crab1[Clawbot: Dev]
-            Crab2[Clawbot: Social]
-        end
-
-        subgraph "Network: open_ocean (Bridge/Internet)"
-            Shell[HermitClaw Gateway]
-            DB[(Pearl Vault DB)]
-        end
-    end
-
-    Crab1 -->|HTTP POST /execute| Shell
-    Crab2 -->|HTTP POST /execute| Shell
-    Shell -->|SQL| DB
-    Shell -->|HTTPS| Github[GitHub API]
-    Shell -->|HTTPS| Slack[Slack API]
-    External[Signal/WhatsApp] -->|Webhook| Shell
+```
+[Browser]           [Internet / Messaging Channels]
+    │                           │
+    │ localhost:3000             │
+    ▼                           ▼
+┌─────────────────────────────────────────┐
+│           hermit_shell:3000             │  ← sole public entry/exit
+│                                         │
+│  • Tide Pool UI (React SPA)             │
+│  • REST API (crabs, secrets, tides)     │
+│  • Model proxy (/v1/chat/completions)   │
+│  • HTTP CONNECT proxy                   │
+│  • Agent UI reverse proxy               │
+│  • Ingress webhook routing (Phase 8D)   │
+└──────────┬──────────────────────────────┘
+           │ sand_bed (internal, no internet)
+    ┌──────┴──────┐
+    │             │
+    ▼             ▼
+[hermit_db]  [openclaw]     [other-clawbot]  ...
+ Postgres     sand_bed         sand_bed
+ (no direct   no internet      no internet
+ agent        HTTP_PROXY=      HTTP_PROXY=
+ access)      hermit_shell     hermit_shell
 ```
 
 ---
 
-## 3. Component Specifications
+## 4. Traffic Types
 
-### A. The Shell (Gateway Service)
+### A. Model API Calls (Application-Layer Proxy)
 
-* **Runtime:** Node.js (TypeScript) + Fastify.
-* **Responsibility:**
-* **Egress (Tool Use):** Intercepts agent requests, decrypts keys, executes API calls.
-* **Ingress (Messaging):** Receives webhooks from chat apps (Signal/WhatsApp) and routes them to the correct Agent container.
-* **Audit:** Logs every single request and response to the database.
+Agent calls `POST /v1/chat/completions` with its crab token. HermitClaw:
+1. Authenticates the crab token
+2. Checks `ModelProviderAccess` (scope: GLOBAL or RESTRICTED)
+3. Resolves the configured `ModelProvider` (Ollama, OpenAI, Anthropic, etc.)
+4. Optionally injects API key from the vault (for cloud providers)
+5. Streams the response back unmodified
+6. Logs request + response to tides
 
-### B. The Pearl Vault (Database)
+**Full content visibility.** Completely transparent to the agent — it believes it is talking
+to a standard OpenAI-compatible API.
 
-* **Runtime:** PostgreSQL 16.
-* **Encryption:** All secrets are encrypted at rest using **AES-256-GCM**.
-* **Schema:**
-* `crabs`: Registered agents and their internal API tokens.
-* `pearls`: Encrypted credentials (API keys, OAuth tokens).
-* `tides`: Audit logs of all traffic.
-* `routes`: Ingress routing rules for incoming messages.
+### B. Outbound Tool/Channel Calls (HTTP CONNECT Proxy)
 
-### C. The Tide Pool (Control Panel)
+All outbound HTTP/HTTPS from agent containers is routed through HermitClaw via
+`HTTP_PROXY=http://hermit_shell:3000`. Node.js honours this natively; zero agent code changes.
 
-* **Runtime:** React + Vite (Single Page App).
-* **Deployment:** Served statically by The Shell container.
-* **Features:**
-* **Secret Manager:** Add/Update API keys.
-* **Live Stream:** Watch agents "thinking" and acting in real-time.
-* **Kill Switch:** Instantly revoke an agent's access to The Shell.
+HermitClaw evaluates `ConnectRule` records (priority-ordered, wildcard domain matching, global
+or per-crab) before allowing or denying each tunnel. Default behaviour is governed by the
+`connect_proxy_default` SystemSetting (`ALLOW` for dev, `DENY` for production hardening).
 
----
+**Host:port visibility only** for HTTPS tunnels (content is encrypted end-to-end).
 
-## 4. Security Core (`crypto.ts`)
+### C. Agent Web UI (Reverse Proxy + WebSocket)
 
-This is the foundation of the vault. It ensures that even if the database is dumped, the secrets are useless without the `MASTER_PEARL`.
+HermitClaw reverse-proxies each agent's web UI at `/agents/:name/*`, including WebSocket
+upgrade passthrough. Agents stay on `sand_bed` with no published ports.
 
-```typescript
-import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+Browser auth uses a **short-lived signed session cookie** (HMAC-SHA256 with `ADMIN_API_KEY`,
+8h TTL, HttpOnly) set at Tide Pool login. The same cookie gates agent UI proxy routes.
 
-// CONFIG: MASTER_PEARL passed via ENV (32 bytes hex)
-const ALGORITHM = 'aes-256-gcm';
-const MASTER_KEY_HEX = process.env.MASTER_PEARL || '';
-const MASTER_KEY = Buffer.from(MASTER_KEY_HEX, 'hex');
+### D. Inbound Webhooks (Deferred — Phase 8D)
 
-if (MASTER_KEY.length !== 32) throw new Error('CRITICAL: Invalid MASTER_PEARL');
-
-export interface EncryptedPearl {
-  encryptedBlob: string; // hex
-  iv: string;            // hex
-  authTag: string;       // hex
-}
-
-// Encrypts a raw secret (API Key)
-export function encryptPearl(text: string): EncryptedPearl {
-  const iv = randomBytes(16); // Unique IV per encryption
-  const cipher = createCipheriv(ALGORITHM, MASTER_KEY, iv);
-
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  const authTag = cipher.getAuthTag().toString('hex');
-
-  return { encryptedBlob: encrypted, iv: iv.toString('hex'), authTag };
-}
-
-// Decrypts a Pearl back into the raw secret
-export function decryptPearl(pearl: EncryptedPearl): string {
-  const decipher = createDecipheriv(ALGORITHM, MASTER_KEY, Buffer.from(pearl.iv, 'hex'));
-  decipher.setAuthTag(Buffer.from(pearl.authTag, 'hex')); // Anti-tamper check
-
-  let decrypted = decipher.update(pearl.encryptedBlob, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
-```
+Messaging services (WhatsApp, Telegram, Slack) call HermitClaw's public webhook endpoint.
+HermitClaw routes internally to the correct agent on `sand_bed`. Agents never need public ports.
 
 ---
 
-## 5. Ingress & Egress Workflows
-
-### Egress: The "Tool Call"
-
-*How an Agent uses a tool (e.g., GitHub).*
-
-1. **Agent** sends payload to Shell:
-```json
-POST http://hermit_shell:3000/v1/execute
-Headers: { "Authorization": "Bearer agent_token_123" }
-Body: { "tool": "github_star", "args": { "repo": "hermit-claw" } }
-```
-
-2. **Shell** validates `agent_token_123`.
-3. **Shell** looks up the `github` credential for this agent in `pearls` table.
-4. **Shell** decrypts the token, constructs the request to `api.github.com`, and executes it.
-5. **Shell** sanitizes the response and returns JSON to Agent.
-
-### Ingress: The "Reverse Route"
-
-*How you send a message to a specific bot via Signal/WhatsApp.*
-
-1. **External Trigger:** You send a Signal message: *"@supportbot check server status"*.
-2. **Signal Connector:** (A container like `signal-cli-rest-api`) receives the message and webhooks to Shell:
-```json
-POST http://hermit_shell:3000/v1/ingress/signal
-Body: { "message": "@supportbot check server status", "sender": "+15550000" }
-```
-
-3. **Shell** checks `routes` table:
-   * *Rule:* "If message starts with `@supportbot`, forward to container `claw_support`."
-
-4. **Shell** forwards payload to the Agent's internal web server:
-```json
-POST http://claw_support:8000/webhook
-Body: { "content": "check server status", "user": "+15550000" }
-```
-
----
-
-## 6. Implementation Strategy
-
-### Phase 1: The Core (Skeleton)
-
-* Setup Monorepo (`/server`, `/web`, `/infra`).
-* Implement `crypto.ts`.
-* Build `POST /v1/execute` stub.
-
-### Phase 2: The Vault (Database)
-
-* Setup PostgreSQL with Prisma ORM.
-* Create `pearls` table migration.
-* Implement "Add Secret" API.
-
-### Phase 3: The Gateway (Logic)
-
-* Implement the "Injector" (Regex replace placeholders with decrypted keys).
-* Add Support for standard Auth types: `Bearer`, `Basic`, `Header`, `QueryParam`.
-
-### Phase 4: The Ingress (Messaging)
-
-* Implement `POST /v1/ingress/:provider`.
-* Implement the internal routing logic.
-
----
-
-## 7. Deployment Configuration (`docker-compose.yml`)
-
-This file is all you need to run HermitClaw alongside a sample Python agent.
+## 5. Network Topology
 
 ```yaml
-version: '3.8'
-
-services:
-  # --- THE HERMITCLAW INFRASTRUCTURE ---
-
-  # 1. The Shell (Gateway + UI)
-  hermit_shell:
-    image: hermitclaw/server:latest
-    container_name: hermit_shell
-    restart: unless-stopped
-    ports:
-      - "3000:3000" # UI and API
-    environment:
-      - DATABASE_URL=postgresql://hermit:securepass@hermit_db:5432/hermitclaw
-      - MASTER_PEARL=${MASTER_PEARL} # 32-byte hex key from .env
-    depends_on:
-      - hermit_db
-    networks:
-      - sand_bed     # To talk to Agents
-      - open_ocean   # To talk to Internet & DB
-
-  # 2. The Pearl Vault (DB)
-  hermit_db:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: hermit
-      POSTGRES_PASSWORD: securepass
-      POSTGRES_DB: hermitclaw
-    volumes:
-      - hermit_data:/var/lib/postgresql/data
-    networks:
-      - open_ocean
-
-  # --- YOUR AGENTS (SANDBOXED) ---
-
-  # 3. Example Agent (Python)
-  # This agent CANNOT reach the internet. It acts via the Shell.
-  claw_agent_01:
-    build: ./examples/python_bot
-    container_name: claw_agent_01
-    environment:
-      - AGENT_NAME=Agent01
-      - SHELL_URL=http://hermit_shell:3000
-      - SHELL_TOKEN=dev_token_123
-    networks:
-      - sand_bed # ISOLATED NETWORK
-    # Optional Security Hardening:
-    # runtime: runsc
-    # read_only: true
-
 networks:
   sand_bed:
-    internal: true # STRICT ISOLATION: No Internet Access
+    internal: true    # No internet. Agents + Shell only.
   open_ocean:
-    driver: bridge # Internet Access
+    driver: bridge    # Internet access. Shell egress only.
 
-volumes:
-  hermit_data:
+# hermit_shell → sand_bed + open_ocean
+# hermit_db    → open_ocean only   (agents cannot reach DB directly)
+# openclaw     → sand_bed only     (HTTP_PROXY routes all outbound via Shell)
 ```
 
-## 8. Directory Structure (Repo Map)
+---
 
-```text
-hermit-claw/
-├── docker-compose.yml       # Production Stack
-├── .env.example             # Secrets template
-├── src/                     # Gateway Source Code
-│   ├── index.ts             # Fastify Entry point
+## 6. Data Model
+
+```
+Crab                 — registered agent (token, allowedTools, expiresAt, uiPort?)
+Pearl                — AES-256-GCM encrypted credential, owned by a Crab
+Tide                 — audit log entry (all traffic: tool calls, model calls, CONNECT tunnels)
+Route                — ingress routing rules (Phase 8D)
+ModelProvider        — LLM backend config (baseUrl, protocol, pearlService?, scope)
+ModelProviderAccess  — join: which Crabs can use a RESTRICTED ModelProvider
+ConnectRule          — domain allow/deny policy for CONNECT proxy
+SystemSetting        — global key-value config (connect_proxy_default, session TTL, etc.)
+```
+
+### Encryption
+
+All pearls encrypted at rest with **AES-256-GCM** using a per-record random IV. The master
+key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in the DB.
+
+---
+
+## 7. Component Specifications
+
+### The Shell (`src/`)
+
+- **Runtime:** Node.js 22 + TypeScript (strict, NodeNext modules)
+- **Framework:** Fastify v5
+- **Routes:**
+  - `GET  /health` — liveness check
+  - `POST /v1/crabs` — register agent
+  - `GET  /v1/crabs` — list agents
+  - `PATCH /v1/crabs/:id/revoke` — kill switch
+  - `POST /v1/secrets` — store encrypted credential
+  - `GET  /v1/secrets` — list credentials (keys only)
+  - `DELETE /v1/secrets/:id` — delete credential
+  - `POST /v1/execute` — tool call gateway (SSRF-guarded, rate-limited, audited)
+  - `GET  /v1/tides` — paginated audit log
+  - `POST /v1/chat/completions` — model proxy (OpenAI-compat, streaming)
+  - `CONNECT *` — HTTP CONNECT tunnel proxy
+  - `GET  /agents/:name/*` — agent web UI reverse proxy (WS passthrough)
+  - `POST /v1/auth/login` — sets signed session cookie
+  - `GET  /v1/providers` — list model providers
+  - `POST /v1/providers` — add model provider
+  - `GET  /v1/connect-rules` — list domain rules
+  - `POST /v1/connect-rules` — add domain rule
+  - `GET  /v1/settings` — get system settings
+  - `PUT  /v1/settings/:key` — update system setting
+  - `GET  /` — serves Tide Pool React SPA (web/dist)
+
+### The Pearl Vault (`hermit_db`)
+
+- PostgreSQL 16, Docker container on `open_ocean`
+- Not accessible from `sand_bed` — agents have no network path to the DB
+
+### The Tide Pool (`web/`)
+
+- React 18 + Vite 7 + Material-UI 7 + Tailwind 3
+- Pages: Login, Agents, Secrets, Audit Log, Providers, Network Rules, Settings
+- Served statically by the Shell at `GET /`
+
+### Ollama (Host)
+
+- Runs directly on Mac host to use Apple Silicon unified memory
+- Reached from Docker via `http://host.docker.internal:11434`
+- Configured via `OLLAMA_BASE_URL` in `.env`
+
+---
+
+## 8. Security Model
+
+### What HermitClaw protects against
+
+| Threat | Mitigation |
+|--------|-----------|
+| Agent holds API keys | Keys stored in vault, never sent to agent |
+| Prompt injection → credential exfil | Agent can't request arbitrary URLs on `/v1/execute` (SSRF guard) |
+| Prompt injection → LLM abuse | ModelProvider scope limits which providers each agent can use |
+| Prompt injection → outbound exfil | CONNECT proxy + domain rules; full audit log of all connections |
+| Runaway agent | Per-agent rate limiting (60 req/min), 30s timeout, kill switch |
+| Token forgery | Tokens are cuid2 values stored in DB; revocation is instant |
+| Token theft (long-lived) | Optional `expiresAt` on crabs; rotation supported |
+| Unauthorized admin access | `ADMIN_API_KEY` required on all management routes; session cookie for UI |
+| Agent ↔ DB lateral movement | `hermit_db` not on `sand_bed`; no network path from agent to DB |
+| Agent ↔ agent lateral movement | Each agent on isolated `sand_bed`; no direct agent-to-agent routes |
+| Port scanning host | No `host.docker.internal` route from `sand_bed` |
+
+### Known limitations / accepted tradeoffs
+
+- HTTPS CONNECT tunnel content is opaque (end-to-end encrypted) — host:port only
+- `MASTER_PEARL` in `.env` — host compromise = vault compromise (inherent in self-hosted model)
+- Mode 3 workspace bots can read each other's subdirectories — intentional, documented
+- SSL inspection (full HTTPS content visibility) is out of scope
+
+---
+
+## 9. Deployment
+
+### Development
+
+```bash
+# Start DB
+docker compose up -d hermit_db
+
+# Start Shell (hot reload)
+npm run dev:backend
+
+# Start Tide Pool (hot reload, proxies /v1 to :3000)
+cd web && npm run dev
+
+# Run tests
+npm test
+```
+
+### Production
+
+```bash
+docker compose up -d          # hermit_shell + hermit_db
+scripts/clawbot-add.sh openclaw --ui-port 18789
+docker compose up -d openclaw
+```
+
+Access Tide Pool at `http://localhost:3000`. Use a reverse proxy (nginx/Caddy) with TLS
+for any network-accessible deployment.
+
+---
+
+## 10. Repository Structure
+
+```
+hermitClaw/
+├── src/
+│   ├── index.ts                  # Fastify entry point + static serve + SPA fallback
 │   ├── routes/
-│   │   ├── execute.ts       # Egress Logic
-│   │   └── ingress.ts       # Inbound Messaging Logic
+│   │   ├── crabs.ts              # Agent registration + kill switch
+│   │   ├── secrets.ts            # Encrypted credential CRUD
+│   │   ├── execute.ts            # POST /v1/execute — tool call gateway
+│   │   ├── tides.ts              # GET /v1/tides — audit log
+│   │   ├── model.ts              # POST /v1/chat/completions — model proxy (Phase 8A)
+│   │   ├── connect.ts            # HTTP CONNECT tunnel proxy (Phase 8B)
+│   │   ├── agent-ui.ts           # /agents/:name/* reverse proxy (Phase 8C)
+│   │   └── auth.ts               # POST /v1/auth/login (Phase 8C)
 │   └── lib/
-│       ├── crypto.ts        # Encryption Module
-│       └── db.ts            # Prisma Client
-├── web/                     # React Dashboard Source
-└── examples/                # Community Examples
-    └── python_bot/          # Minimal bot using HermitClaw
-        ├── Dockerfile
-        └── main.py
-```
+│       ├── auth.ts               # requireCrab / requireAdmin prehandlers
+│       ├── crypto.ts             # AES-256-GCM encrypt/decrypt
+│       ├── db.ts                 # Prisma client singleton
+│       ├── ssrf.ts               # SSRF guard (RFC-1918, IPv6, DNS rebinding)
+│       ├── injector.ts           # Credential injection strategies
+│       ├── connect-rules.ts      # CONNECT proxy rule evaluation (Phase 8B)
+│       └── session.ts            # Signed session cookie (Phase 8C)
+├── web/
+│   └── src/
+│       ├── App.tsx               # Main layout + login gate
+│       ├── api/                  # Typed fetch client + types
+│       └── pages/
+│           ├── LoginPage.tsx     # Admin key entry (Phase 8C)
+│           ├── AgentsPage.tsx    # Register/revoke agents
+│           ├── SecretsPage.tsx   # Credential CRUD
+│           ├── AuditLogPage.tsx  # Paginated tides
+│           ├── ProvidersPage.tsx # Model provider management (Phase 8A)
+│           ├── NetworkPage.tsx   # Domain rules (Phase 8B)
+│           └── SettingsPage.tsx  # System settings (Phase 8B)
+├── prisma/
+│   └── schema.prisma             # Full schema (crabs, pearls, tides, routes,
+│                                 #   model_providers, connect_rules, system_settings)
+├── scripts/
+│   ├── dev.sh                    # Start full dev environment
+│   ├── clawbot-add.sh            # Register + provision a clawbot (Phase 8C)
+│   ├── clawbot-remove.sh         # Revoke + teardown (Phase 8C)
+│   └── clawbots-sync.sh          # Idempotent convergence to clawbots.yml (Phase 8C)
+├── examples/
+│   └── openclaw/
+│       └── openclaw.json         # Provider config template (Phase 8C)
+├── tests/                        # Vitest — 90 tests passing
+├── docker-compose.yml
+├── Dockerfile
+├── clawbots.yml.example          # User-facing clawbot config (Phase 8C)
+├── .env.example
+├── DESIGN.md                     # This file
+├── PLAN.md                       # Phase-by-phase implementation checklist
+└── coding_agent_logs/            # Audit trail of every build session
+    ├── STATUS.md                 # Single source of truth for resuming work
+    └── sessions/                 # 001–008 session logs

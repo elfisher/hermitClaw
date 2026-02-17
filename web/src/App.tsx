@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Box, Drawer, AppBar, Toolbar, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, CssBaseline } from '@mui/material';
-import { Shield as AgentsIcon, VpnKey as SecretsIcon, History as AuditLogIcon } from '@mui/icons-material';
+import { Shield as AgentsIcon, VpnKey as SecretsIcon, History as AuditLogIcon, SmartToy as ProvidersIcon } from '@mui/icons-material';
 import { AgentsPage } from './pages/AgentsPage.js';
 import { SecretsPage } from './pages/SecretsPage.js';
 import { AuditLogPage } from './pages/AuditLogPage.js';
+import { ProvidersPage } from './pages/ProvidersPage.js';
 
-type Tab = 'agents' | 'secrets' | 'audit';
+type Tab = 'agents' | 'secrets' | 'providers' | 'audit';
 
 const TABS: { id: Tab; label: string; icon: React.ReactElement }[] = [
   { id: 'agents', label: 'Agents', icon: <AgentsIcon /> },
   { id: 'secrets', label: 'Secrets', icon: <SecretsIcon /> },
+  { id: 'providers', label: 'Providers', icon: <ProvidersIcon /> },
   { id: 'audit', label: 'Audit Log', icon: <AuditLogIcon /> },
 ];
 
@@ -56,6 +58,7 @@ export default function App() {
         <Toolbar />
         {tab === 'agents' && <AgentsPage />}
         {tab === 'secrets' && <SecretsPage />}
+        {tab === 'providers' && <ProvidersPage />}
         {tab === 'audit' && <AuditLogPage />}
       </Box>
     </Box>

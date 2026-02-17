@@ -74,13 +74,78 @@
 
 ---
 
-## Phase 5 — Ingress Routing *(deferred / post-MVP)*
+## Phase 5 — Ingress Routing *(deferred → Phase 8D)*
 **Goal:** External messages (Signal/WhatsApp) are routed to the correct agent container.
 
 - [ ] `POST /v1/ingress/:provider` route
 - [ ] `routes` table lookup — match message pattern → target agent container
 - [ ] Forward payload to agent's internal webhook endpoint
 - [ ] Verify: Signal message reaches correct agent via Shell routing
+
+---
+
+## Phase 8A — Model Proxy
+**Goal:** Agents call HermitClaw as if it were an OpenAI-compatible API. HermitClaw proxies
+to Ollama (local) or cloud providers, injecting credentials from the vault when needed.
+
+- [x] `prisma/schema.prisma` — add `ModelProvider`, `ModelProviderAccess`, `Protocol`, `ProviderScope` enums
+- [x] `npx prisma db push` — apply schema changes
+- [x] `src/routes/model.ts` — `POST /v1/chat/completions` with streaming passthrough
+- [x] `src/lib/ssrf.ts` — add provider bypass (admin-configured providers skip IP check)
+- [x] `web/src/pages/ProvidersPage.tsx` — add/edit/delete providers, manage RESTRICTED access
+- [x] `web/src/api/client.ts` + `types.ts` — provider CRUD
+- [x] `web/src/App.tsx` — add Providers tab to sidebar
+- [x] `.env.example` — add `OLLAMA_BASE_URL`
+- [ ] Verify: OpenClaw calls `/v1/chat/completions` → HermitClaw → Ollama → streamed response (needs OpenClaw container)
+
+---
+
+## Phase 8B — HTTP CONNECT Proxy + Domain Rules
+**Goal:** All outbound traffic from agent containers flows through HermitClaw. Domain
+allow/deny rules are configurable in Tide Pool. Default: ALLOW (flip to DENY for prod).
+
+- [ ] `prisma/schema.prisma` — add `ConnectRule`, `RuleAction`, `SystemSetting`
+- [ ] `src/routes/connect.ts` — HTTP CONNECT tunnel handler
+- [ ] `src/lib/connect-rules.ts` — rule evaluation (priority order, wildcard, per-crab)
+- [ ] `src/index.ts` — register CONNECT handler at server level
+- [ ] `web/src/pages/NetworkPage.tsx` — manage ConnectRules + default policy
+- [ ] `web/src/pages/SettingsPage.tsx` — SystemSettings (cookie TTL, proxy default, etc.)
+- [ ] `web/src/App.tsx` — add Network + Settings tabs
+- [ ] Verify: agent container with `HTTP_PROXY=hermit_shell:3000` routes all traffic through Shell; blocked domain returns 403
+
+---
+
+## Phase 8C — Agent UI Proxy + Cookie Auth + OpenClaw Provisioning
+**Goal:** OpenClaw's full web UI (WebChat + Control) is accessible through HermitClaw at
+`/agents/openclaw/`, auth-gated by a signed session cookie set at Tide Pool login.
+Provisioning scripts bootstrap agent containers end-to-end.
+
+- [ ] `prisma/schema.prisma` — add `Crab.uiPort` field
+- [ ] `src/lib/session.ts` — signed session cookie issue/verify (HMAC-SHA256)
+- [ ] `src/routes/auth.ts` — `POST /v1/auth/login` → validates admin key → sets cookie
+- [ ] `src/routes/agent-ui.ts` — `/agents/:name/*` reverse proxy + WebSocket upgrade passthrough
+- [ ] `web/src/pages/LoginPage.tsx` — admin key entry form
+- [ ] `web/src/App.tsx` — login gate (check session cookie; redirect to login if absent)
+- [ ] `web/src/pages/AgentsPage.tsx` — "Open UI" button when `uiPort` is set
+- [ ] `docker-compose.yml` — add `openclaw` service (sand_bed, HTTP_PROXY, read_only, etc.)
+- [ ] `scripts/clawbot-add.sh` — register crab, write token, write openclaw.json config
+- [ ] `scripts/clawbot-remove.sh` — revoke crab, stop container, optionally destroy data
+- [ ] `scripts/clawbots-sync.sh` — idempotent convergence from `clawbots.yml`
+- [ ] `clawbots.yml.example` — user-facing config template
+- [ ] `examples/openclaw/openclaw.json` — OpenClaw hermitclaw provider config template
+- [ ] Verify: full bootstrap sequence works end-to-end; OpenClaw UI accessible at `/agents/openclaw/`
+
+---
+
+## Phase 8D — Inbound Routing *(formerly Phase 5)*
+**Goal:** Messaging channels (WhatsApp, Telegram, Slack) call HermitClaw's public webhook.
+HermitClaw routes internally to the correct agent on `sand_bed`. Agents never need public ports.
+
+- [ ] `POST /v1/ingress/:provider` route
+- [ ] `routes` table lookup — match message prefix → target agent container name
+- [ ] Forward payload to agent internal endpoint via `sand_bed` network
+- [ ] Tide Pool: Routes management tab
+- [ ] Verify: inbound webhook reaches correct agent without any public agent port
 
 ---
 
