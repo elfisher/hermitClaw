@@ -146,6 +146,7 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
   - `GET  /health` — liveness check
   - `POST /v1/crabs` — register agent
   - `GET  /v1/crabs` — list agents
+  - `PATCH /v1/crabs/:id` — update agent fields (e.g. `uiPort`)
   - `PATCH /v1/crabs/:id/revoke` — kill switch
   - `POST /v1/secrets` — store encrypted credential
   - `GET  /v1/secrets` — list credentials (keys only)
@@ -154,12 +155,17 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
   - `GET  /v1/tides` — paginated audit log
   - `POST /v1/chat/completions` — model proxy (OpenAI-compat, streaming)
   - `CONNECT *` — HTTP CONNECT tunnel proxy
-  - `GET  /agents/:name/*` — agent web UI reverse proxy (WS passthrough)
-  - `POST /v1/auth/login` — sets signed session cookie
+  - `GET|POST|... /agents/:name/*` — agent web UI reverse proxy (all methods + WS passthrough)
+  - `POST /v1/auth/login` — validates admin key, sets signed session cookie
+  - `POST /v1/auth/logout` — clears session cookie
+  - `GET  /v1/auth/me` — session validity check (used by SPA on load)
   - `GET  /v1/providers` — list model providers
   - `POST /v1/providers` — add model provider
+  - `PATCH /v1/providers/:id` — update model provider
+  - `DELETE /v1/providers/:id` — delete model provider
   - `GET  /v1/connect-rules` — list domain rules
   - `POST /v1/connect-rules` — add domain rule
+  - `DELETE /v1/connect-rules/:id` — delete domain rule
   - `GET  /v1/settings` — get system settings
   - `PUT  /v1/settings/:key` — update system setting
   - `GET  /` — serves Tide Pool React SPA (web/dist)
@@ -215,18 +221,15 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
 ### Development
 
 ```bash
-# Start DB
-docker compose up -d hermit_db
-
-# Start Shell (hot reload)
-npm run dev:backend
-
-# Start Tide Pool (hot reload, proxies /v1 to :3000)
-cd web && npm run dev
+# One command: starts DB, syncs schema, hot-reloads backend + frontend
+npm run dev
 
 # Run tests
 npm test
 ```
+
+`npm run dev` (via `scripts/dev.sh`) checks `.env`, starts `hermit_db`, waits for healthy,
+runs `prisma db push`, then starts backend (`tsx watch`) and frontend (`Vite`) concurrently.
 
 ### Production
 

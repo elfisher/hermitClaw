@@ -104,14 +104,14 @@ to Ollama (local) or cloud providers, injecting credentials from the vault when 
 **Goal:** All outbound traffic from agent containers flows through HermitClaw. Domain
 allow/deny rules are configurable in Tide Pool. Default: ALLOW (flip to DENY for prod).
 
-- [ ] `prisma/schema.prisma` — add `ConnectRule`, `RuleAction`, `SystemSetting`
-- [ ] `src/routes/connect.ts` — HTTP CONNECT tunnel handler
-- [ ] `src/lib/connect-rules.ts` — rule evaluation (priority order, wildcard, per-crab)
-- [ ] `src/index.ts` — register CONNECT handler at server level
-- [ ] `web/src/pages/NetworkPage.tsx` — manage ConnectRules + default policy
-- [ ] `web/src/pages/SettingsPage.tsx` — SystemSettings (cookie TTL, proxy default, etc.)
-- [ ] `web/src/App.tsx` — add Network + Settings tabs
-- [ ] Verify: agent container with `HTTP_PROXY=hermit_shell:3000` routes all traffic through Shell; blocked domain returns 403
+- [x] `prisma/schema.prisma` — add `ConnectRule`, `RuleAction`, `SystemSetting`
+- [x] `src/routes/connect.ts` — HTTP CONNECT tunnel handler
+- [x] `src/lib/connect-rules.ts` — rule evaluation (priority order, wildcard, per-crab)
+- [x] `src/index.ts` — register CONNECT handler at server level
+- [x] `web/src/pages/NetworkPage.tsx` — manage ConnectRules + default policy
+- [x] `web/src/pages/SettingsPage.tsx` — SystemSettings (cookie TTL, proxy default, etc.)
+- [x] `web/src/App.tsx` — add Network + Settings tabs
+- [ ] Verify: agent container with `HTTP_PROXY=hermit_shell:3000` routes all traffic through Shell; blocked domain returns 403 (end-to-end test pending)
 
 ---
 
@@ -120,20 +120,20 @@ allow/deny rules are configurable in Tide Pool. Default: ALLOW (flip to DENY for
 `/agents/openclaw/`, auth-gated by a signed session cookie set at Tide Pool login.
 Provisioning scripts bootstrap agent containers end-to-end.
 
-- [ ] `prisma/schema.prisma` — add `Crab.uiPort` field
-- [ ] `src/lib/session.ts` — signed session cookie issue/verify (HMAC-SHA256)
-- [ ] `src/routes/auth.ts` — `POST /v1/auth/login` → validates admin key → sets cookie
-- [ ] `src/routes/agent-ui.ts` — `/agents/:name/*` reverse proxy + WebSocket upgrade passthrough
-- [ ] `web/src/pages/LoginPage.tsx` — admin key entry form
-- [ ] `web/src/App.tsx` — login gate (check session cookie; redirect to login if absent)
-- [ ] `web/src/pages/AgentsPage.tsx` — "Open UI" button when `uiPort` is set
-- [ ] `docker-compose.yml` — add `openclaw` service (sand_bed, HTTP_PROXY, read_only, etc.)
-- [ ] `scripts/clawbot-add.sh` — register crab, write token, write openclaw.json config
-- [ ] `scripts/clawbot-remove.sh` — revoke crab, stop container, optionally destroy data
-- [ ] `scripts/clawbots-sync.sh` — idempotent convergence from `clawbots.yml`
-- [ ] `clawbots.yml.example` — user-facing config template
-- [ ] `examples/openclaw/openclaw.json` — OpenClaw hermitclaw provider config template
-- [ ] Verify: full bootstrap sequence works end-to-end; OpenClaw UI accessible at `/agents/openclaw/`
+- [x] `prisma/schema.prisma` — add `Crab.uiPort` field
+- [x] `src/lib/session.ts` — signed session cookie issue/verify (HMAC-SHA256)
+- [x] `src/routes/auth.ts` — `POST /v1/auth/login` → validates admin key → sets cookie
+- [x] `src/routes/agent-ui.ts` — `/agents/:name/*` reverse proxy + WebSocket upgrade passthrough
+- [x] `web/src/pages/LoginPage.tsx` — admin key entry form
+- [x] `web/src/App.tsx` — login gate (check session cookie; redirect to login if absent)
+- [x] `web/src/pages/AgentsPage.tsx` — "Open UI" button when `uiPort` is set
+- [x] `docker-compose.yml` — add `openclaw` service template (commented, sand_bed, HTTP_PROXY, read_only, etc.)
+- [x] `scripts/clawbot-add.sh` — register crab, write token, write openclaw.json config
+- [x] `scripts/clawbot-remove.sh` — revoke crab, stop container, optionally destroy data
+- [x] `scripts/clawbots-sync.sh` — idempotent convergence from `clawbots.yml`
+- [x] `clawbots.yml.example` — user-facing config template
+- [x] `examples/openclaw/openclaw.json` — OpenClaw hermitclaw provider config template
+- [ ] Verify: full bootstrap sequence works end-to-end; OpenClaw UI accessible at `/agents/openclaw/` (end-to-end test pending)
 
 ---
 

@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** Phase 8B — HTTP CONNECT Proxy + Domain Rules
-**Last Session:** `009-phase-8a-model-proxy`
-**Build status:** `tsc` clean (backend + frontend). 90/90 tests passing. Backend running locally. Phase 8A complete and smoke tested.
+**Active Phase:** Phases 8A–8C complete. Next: end-to-end test with real agent container, then Phase 8D (Inbound Routing) or deferred.
+**Last Session:** `010-phase-8bc-connect-proxy-session-auth`
+**Build status:** `tsc` clean (backend + frontend). 90/90 tests passing. `npm run dev` one-command startup working.
 
 ---
 
@@ -30,10 +30,10 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Security Hardening (P0/P1/P2)** — complete (partial, see backlog below)
 - [x] **UI Overhaul (MUI)** — complete (`007-security-hardening.md`)
 - [x] **Phase 8A — Model Proxy** — complete (`009-phase-8a-model-proxy`)
-- [ ] **Phase 8B — HTTP CONNECT Proxy** — design complete, not yet built
-- [ ] **Phase 8C — OpenClaw Provisioning** — design complete, not yet built
+- [x] **Phase 8B — HTTP CONNECT Proxy** — complete (`010-phase-8bc-connect-proxy-session-auth`)
+- [x] **Phase 8C — Session Auth + Agent UI Proxy** — complete (`010-phase-8bc-connect-proxy-session-auth`)
 - [ ] **Phase 8D — Inbound Routing** — deferred (was Phase 5)
-- [ ] **Clawbot Provisioning Scripts** — design complete (`006-clawbot-provisioning-design.md`), not yet built
+- [x] **Clawbot Provisioning Scripts** — complete (`clawbot-add.sh`, `clawbot-remove.sh`, `clawbots-sync.sh`)
 - [ ] **Phase 4 — Python Example Agent** — superseded by OpenClaw integration
 - [ ] **Phase 6 — Activity Monitor** — not started (design needed)
 - [ ] **Phase 7 — Risk Scanner** — not started (design needed)
@@ -42,10 +42,21 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ## What To Do Next
 
-**Build Phase 8B — HTTP CONNECT Proxy + Domain Rules.**
-See PLAN.md Phase 8B checklist.
+**Phases 8A–8C are complete.** The stack is ready for an end-to-end test with a real OpenClaw container.
 
-**Suggested build order:** 8B (CONNECT proxy) → 8C (provisioning) → 8D (inbound)
+**Recommended next steps (in order):**
+
+1. **End-to-end smoke test** — Run `scripts/clawbot-add.sh openclaw --ui-port 18789`, start the stack with `npm run dev`, and verify:
+   - Tide Pool login gate works (session cookie)
+   - `/agents/openclaw/` reverse proxy reaches the OpenClaw UI
+   - `/v1/chat/completions` routes to Ollama
+   - CONNECT proxy enforces domain rules
+
+2. **Phase 8D — Inbound Routing** — `POST /v1/ingress/:provider` → lookup route → forward to agent on `sand_bed`. Design already in PLAN.md.
+
+3. **Phase 6 — Activity Monitor** — Real-time view of tides (WebSocket stream). Design needed.
+
+4. **Phase 7 — Risk Scanner** — Scan agent output/behaviour for anomalies. Design needed.
 
 ---
 
@@ -283,32 +294,55 @@ examples/clawbot-base/
 ```
 hermitClaw/
 ├── src/
-│   ├── index.ts              # Fastify entry point + static serve
+│   ├── index.ts              # Fastify entry point + cookie plugin + static serve
 │   ├── routes/
-│   │   ├── crabs.ts          # Agent registration + kill switch
+│   │   ├── crabs.ts          # Agent registration + kill switch + PATCH uiPort
 │   │   ├── secrets.ts        # Encrypted credential CRUD
 │   │   ├── execute.ts        # POST /v1/execute — the gateway
-│   │   └── tides.ts          # GET /v1/tides — audit log
+│   │   ├── tides.ts          # GET /v1/tides — audit log
+│   │   ├── model.ts          # POST /v1/chat/completions — model proxy (8A)
+│   │   ├── connect.ts        # HTTP CONNECT tunnel proxy (8B)
+│   │   ├── agent-ui.ts       # /agents/:name/* reverse proxy + WS passthrough (8C)
+│   │   └── auth.ts           # POST /v1/auth/login|logout, GET /v1/auth/me (8C)
 │   └── lib/
-│       ├── auth.ts           # requireCrab prehandler
+│       ├── auth.ts           # requireCrab / requireAdmin prehandlers
 │       ├── crypto.ts         # AES-256-GCM encrypt/decrypt
 │       ├── db.ts             # Prisma client singleton
-│       └── injector.ts       # Credential injection strategies
-├── web/                      # Tide Pool UI (React + Vite + Tailwind)
+│       ├── ssrf.ts           # SSRF guard (RFC-1918, IPv6, IMDS, DNS rebinding)
+│       ├── injector.ts       # Credential injection strategies
+│       ├── connect-rules.ts  # CONNECT proxy rule evaluation (8B)
+│       └── session.ts        # HMAC-SHA256 signed session cookies (8C)
+├── web/                      # Tide Pool UI (React 18 + Vite 7 + MUI 7 + Tailwind)
 │   └── src/
-│       ├── App.tsx           # Tab shell
-│       ├── api/              # Typed fetch client
-│       └── pages/            # AgentsPage, SecretsPage, AuditLogPage
+│       ├── App.tsx           # Main layout + login gate
+│       ├── api/              # Typed fetch client + types
+│       └── pages/
+│           ├── LoginPage.tsx     # Admin key entry form (8C)
+│           ├── AgentsPage.tsx    # Register/revoke + Open UI button
+│           ├── SecretsPage.tsx   # Credential CRUD
+│           ├── AuditLogPage.tsx  # Paginated tides
+│           ├── ProvidersPage.tsx # Model provider management (8A)
+│           ├── NetworkPage.tsx   # Domain rules (8B)
+│           └── SettingsPage.tsx  # System settings (8B)
 ├── tests/
 │   ├── helpers/              # app.ts, db-mock.ts
 │   ├── unit/                 # crypto, injector
 │   └── routes/               # crabs, secrets, execute
-├── examples/                 # Empty — Phase 4
+├── scripts/
+│   ├── dev.sh                # One-command dev startup (DB + backend + frontend)
+│   ├── clawbot-add.sh        # Register + provision a clawbot (8C)
+│   ├── clawbot-remove.sh     # Revoke + teardown (8C)
+│   └── clawbots-sync.sh      # Idempotent convergence to clawbots.yml (8C)
+├── examples/
+│   └── openclaw/
+│       └── openclaw.json     # OpenClaw provider config template (8C)
 ├── prisma/
-│   └── schema.prisma         # crabs, pearls, tides, routes
+│   └── schema.prisma         # Full schema (crabs, pearls, tides, routes,
+│                             #   model_providers, connect_rules, system_settings)
 ├── coding_agent_logs/
 │   ├── STATUS.md             # This file
-│   └── sessions/             # 001–006
+│   └── sessions/             # 001–010
+├── clawbots.yml.example      # User-facing clawbot config template (8C)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── vitest.config.ts
@@ -339,15 +373,10 @@ hermitClaw/
 
 - Docker build not yet verified end-to-end (needs Docker daemon running — run `docker compose up` to verify)
 - `pino-pretty` should move to `devDependencies` before production release
-- **Tide Pool UI has no real login screen** — admin API key is currently injected at Vite
-  build time via `VITE_ADMIN_API_KEY` in `web/.env.local`. This is acceptable for local
-  dev but means the key is baked into the JS bundle. Before sharing the UI with others or
-  running it on a network, implement a proper login screen: prompt for the admin key on
-  first load, store it in `sessionStorage` (cleared on tab close), and read from there in
-  `apiFetch`. The `client.ts` change is already structured for this — swap
-  `import.meta.env.VITE_ADMIN_API_KEY` for a `getAdminKey()` helper that reads
-  `sessionStorage`.
 - **No `prisma/migrations/` directory** — schema was applied with `prisma db push` (dev
   shortcut). Before production or multi-environment use, create a proper migration baseline:
   `npx prisma migrate dev --name init`. This generates versioned SQL files that can be
   replayed reliably on a fresh DB.
+- **End-to-end smoke test not yet run** — Phase 8C built and `tsc` clean, but has not been
+  tested with a real OpenClaw container. Run the provisioning sequence and verify the full
+  flow before treating this as production-ready.
