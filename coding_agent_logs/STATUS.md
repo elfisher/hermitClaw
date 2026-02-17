@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** UI Implementation
-**Last Session:** `007-ui-implementation`
-**Build status:** `tsc` clean. Vite build clean. 90/90 tests passing. Docker not yet verified (requires Docker daemon).
+**Active Phase:** OpenClaw Integration — design complete, ready to build
+**Last Session:** `008-openclaw-integration-design`
+**Build status:** `tsc` clean. Vite build clean. 90/90 tests passing. Backend + DB running locally. Full stack verified working.
 
 ---
 
@@ -27,13 +27,14 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Phase 1 — Crypto + Vault** — complete (`002-phase-1-crypto-vault.md`)
 - [x] **Phase 2 — Execute Gateway** — complete (`003-phase-2-execute-gateway.md`)
 - [x] **Phase 3 — Tide Pool UI** — complete (`005-phase-3-tide-pool-ui.md`)
-- [x] **Security Hardening (P0)** — complete (`007-security-hardening.md`)
-- [x] **Security Hardening (P1)** — complete (partial, see backlog below)
-- [x] **Security Hardening (P2)** — complete (partial, see backlog below)
-- [x] **UI Implementation** — complete (`007-ui-implementation`)
-- [ ] **Clawbot Provisioning** — design complete, not yet built (see below)
-- [ ] **Phase 4 — Python Example Agent** — not started
-- [ ] **Phase 5 — Ingress Routing** — deferred (post-MVP)
+- [x] **Security Hardening (P0/P1/P2)** — complete (partial, see backlog below)
+- [x] **UI Overhaul (MUI)** — complete (`007-security-hardening.md`)
+- [ ] **Phase 8A — Model Proxy** — design complete (`008-openclaw-integration-design.md`), not yet built
+- [ ] **Phase 8B — HTTP CONNECT Proxy** — design complete, not yet built
+- [ ] **Phase 8C — OpenClaw Provisioning** — design complete, not yet built
+- [ ] **Phase 8D — Inbound Routing** — deferred (was Phase 5)
+- [ ] **Clawbot Provisioning Scripts** — design complete (`006-clawbot-provisioning-design.md`), not yet built
+- [ ] **Phase 4 — Python Example Agent** — superseded by OpenClaw integration
 - [ ] **Phase 6 — Activity Monitor** — not started (design needed)
 - [ ] **Phase 7 — Risk Scanner** — not started (design needed)
 
@@ -41,13 +42,80 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ## What To Do Next
 
-### Option A: Build Clawbot Provisioning System
-Design is fully agreed. See "Clawbot Provisioning Design" section below.
+**Build Phase 8A — Model Proxy.** Design is fully agreed. See "OpenClaw Integration Design"
+section below and full session at `008-openclaw-integration-design.md`.
 
-### Option B: Security Hardening (Remaining P1/P2)
-Several remaining P1/P2 issues should be fixed before provisioning is built on top of an insecure base. See "Security Backlog" section below.
+**Suggested build order:** 8A (model proxy) → 8B (CONNECT proxy) → 8C (provisioning) → 8D (inbound)
 
-**Suggested order:** Clawbot Provisioning → Security P1s → Python Example Agent
+---
+
+## OpenClaw Integration Design
+
+> Full design in `008-openclaw-integration-design.md`. Summary below.
+
+### Goal
+
+HermitClaw becomes the **sole broker** for all OpenClaw traffic — model calls, outbound
+channel/tool calls, and eventually inbound webhooks. OpenClaw runs in Docker with no direct
+internet access. Everything is auditable and blockable at HermitClaw.
+
+### Architecture
+
+```
+[Internet]
+    │
+    ▼
+[hermit_shell:3000]   ← sole public entry/exit
+    │  sand_bed
+    ├──► [hermit_db]      (Postgres, not reachable by openclaw)
+    │  sand_bed
+    └──► [openclaw]       (no internet, HTTP_PROXY=hermit_shell:3000)
+```
+
+### Traffic Routing
+
+| Traffic type | Mechanism | Content visible |
+|---|---|---|
+| LLM inference | App-layer proxy: `POST /v1/chat/completions` | Full request + response |
+| Outbound channel calls | HTTP CONNECT tunnel via `HTTP_PROXY` | Host + port only (HTTPS opaque) |
+| Inbound webhooks | HermitClaw ingress routing (Phase 8D, deferred) | Full |
+
+### Model Provider Data Model
+
+```
+ModelProvider: id, name, baseUrl, protocol (openai|anthropic), pearlService?
+```
+
+`pearlService: null` = no auth (Ollama local). `pearlService: "openai"` = look up pearl
+for that service and inject as API key. Zero code changes to add new providers.
+
+### OpenClaw Config (openclaw.json)
+
+```json
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "hermitclaw": {
+        "baseUrl": "http://hermit_shell:3000/v1",
+        "apiKey": "${HERMITCLAW_TOKEN}",
+        "api": "openai-completions",
+        "models": [{ "id": "ollama/llama3.2", "name": "Llama 3.2 (local)" }]
+      }
+    }
+  }
+}
+```
+
+### Ollama Placement
+
+Runs directly on Mac host (Apple Silicon unified memory). Reached from Docker via
+`host.docker.internal:11434`. Configured via `OLLAMA_BASE_URL` in `.env`.
+
+### Open Questions (decide before building 8B)
+
+- CONNECT proxy: **allowlist** (default deny) vs **denylist** (default allow)?
+- `ModelProvider` scope: **global** (any crab) vs **crab-scoped** (per agent)?
 
 ---
 
