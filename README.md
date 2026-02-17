@@ -300,67 +300,28 @@ NODE_ENV=development
 
 ---
 
-### Step 3 — Start the database
+### Step 3 — Start the dev environment
 
 ```bash
-docker compose up -d hermit_db
-```
-
-This starts only the PostgreSQL container. Wait a few seconds for it to become healthy:
-
-```bash
-docker compose ps   # hermit_db should show "healthy"
-```
-
----
-
-### Step 4 — Push the database schema
-
-```bash
-npx prisma db push
-```
-
-This creates all tables without needing a migration history. You only need to re-run this when `prisma/schema.prisma` changes.
-
----
-
-### Step 5 — Start the backend (hot reload)
-
-Open a terminal and run:
-
-```bash
-npm run dev:backend
-```
-
-This uses `tsx watch` — the server restarts automatically on any file change in `src/`. You should see:
-
-```
-Server listening at http://0.0.0.0:3000
-```
-
-Verify it's running:
-
-```bash
-curl http://localhost:3000/health
-# {"status":"ok","service":"hermitclaw","version":"0.1.0"}
-```
-
----
-
-### Step 6 — Start the frontend (Vite dev server)
-
-Open a second terminal:
-
-```bash
-cd web
 npm run dev
 ```
 
-The Tide Pool UI will be available at **`http://localhost:5173`**. Vite proxies all `/v1/*` API calls to the backend at `http://localhost:3000`, so no CORS issues.
+This single command:
+- Starts the PostgreSQL container (`hermit_db` only)
+- Waits for it to be healthy
+- Runs `prisma db push` to sync the schema
+- Starts the backend (`tsx watch`, hot reload) and the Vite frontend concurrently
+
+Output will be labeled `[backend]` (cyan) and `[frontend]` (magenta). Ctrl-C stops everything.
+
+| URL | What |
+|-----|------|
+| `http://localhost:3000` | Hermit Shell API |
+| `http://localhost:5173` | Tide Pool UI (Vite, proxies `/v1/*` to backend) |
 
 ---
 
-### Step 7 — Sign in to Tide Pool
+### Step 4 — Sign in to Tide Pool
 
 1. Open `http://localhost:5173` in your browser.
 2. Enter your `ADMIN_API_KEY` from `.env`.
@@ -368,7 +329,7 @@ The Tide Pool UI will be available at **`http://localhost:5173`**. Vite proxies 
 
 ---
 
-### Step 8 — Register your first agent
+### Step 5 — Register your first agent
 
 In Tide Pool, go to **Agents → Register Agent** and give it a name (e.g. `test-bot`).
 
@@ -385,7 +346,7 @@ Copy the `token` — it's only shown once.
 
 ---
 
-### Step 9 — Make a test tool call
+### Step 6 — Make a test tool call
 
 ```bash
 curl -s -X POST http://localhost:3000/v1/execute \
