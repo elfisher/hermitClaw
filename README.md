@@ -4,7 +4,7 @@
 
 HermitClaw is a self-hosted, secure tool execution gateway and credential vault for AI agents. Agents are sandboxed with zero internet access — all tool calls are routed through HermitClaw, which validates the request, injects the right credentials, executes the call, and logs everything.
 
-> **Status:** In Development — Phases 0–3 complete. Clawbot provisioning system next.
+> **Status:** Phases 0–8C complete. Login-gated Tide Pool UI, model proxy, CONNECT proxy with domain rules, agent UI reverse proxy, and clawbot provisioning scripts.
 
 ---
 
@@ -246,21 +246,202 @@ A reverse proxy configured with a valid SSL/TLS certificate will encrypt all tra
 
 ---
 
-## Development
+## Local Development Setup
+
+This guide runs the backend with hot-reload and the frontend with Vite's dev server — no Docker build step required after the initial database setup.
+
+### Prerequisites
+
+- **Node.js 22+** (`node --version`)
+- **Docker Desktop** (for the database)
+- **npm** (bundled with Node)
+
+---
+
+### Step 1 — Clone and install dependencies
 
 ```bash
-# Run the server locally (hot reload)
-npm run dev
+git clone https://github.com/elfisher/hermitClaw.git
+cd hermitClaw
+npm install          # installs backend deps + runs prisma generate
+cd web && npm install && cd ..
+```
 
-# Type check
+---
+
+### Step 2 — Create your `.env` file
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in the two required values:
+
+```bash
+# Generate a 32-byte master encryption key (encrypts all stored secrets)
+echo "MASTER_PEARL=$(openssl rand -hex 32)" >> .env
+
+# Generate a secure admin API key (used to log in to Tide Pool)
+echo "ADMIN_API_KEY=$(openssl rand -hex 32)" >> .env
+```
+
+Your `.env` should now look like this:
+
+```
+MASTER_PEARL=<64-char hex>
+ADMIN_API_KEY=<64-char hex>
+DB_PASSWORD=securepass
+DATABASE_URL=postgresql://hermit:securepass@localhost:5432/hermitclaw
+PORT=3000
+NODE_ENV=development
+```
+
+> **Note:** `DB_PASSWORD` can stay as `securepass` for local dev — the database port is not exposed to the network.
+
+---
+
+### Step 3 — Start the database
+
+```bash
+docker compose up -d hermit_db
+```
+
+This starts only the PostgreSQL container. Wait a few seconds for it to become healthy:
+
+```bash
+docker compose ps   # hermit_db should show "healthy"
+```
+
+---
+
+### Step 4 — Push the database schema
+
+```bash
+npx prisma db push
+```
+
+This creates all tables without needing a migration history. You only need to re-run this when `prisma/schema.prisma` changes.
+
+---
+
+### Step 5 — Start the backend (hot reload)
+
+Open a terminal and run:
+
+```bash
+npm run dev:backend
+```
+
+This uses `tsx watch` — the server restarts automatically on any file change in `src/`. You should see:
+
+```
+Server listening at http://0.0.0.0:3000
+```
+
+Verify it's running:
+
+```bash
+curl http://localhost:3000/health
+# {"status":"ok","service":"hermitclaw","version":"0.1.0"}
+```
+
+---
+
+### Step 6 — Start the frontend (Vite dev server)
+
+Open a second terminal:
+
+```bash
+cd web
+npm run dev
+```
+
+The Tide Pool UI will be available at **`http://localhost:5173`**. Vite proxies all `/v1/*` API calls to the backend at `http://localhost:3000`, so no CORS issues.
+
+---
+
+### Step 7 — Sign in to Tide Pool
+
+1. Open `http://localhost:5173` in your browser.
+2. Enter your `ADMIN_API_KEY` from `.env`.
+3. You're in.
+
+---
+
+### Step 8 — Register your first agent
+
+In Tide Pool, go to **Agents → Register Agent** and give it a name (e.g. `test-bot`).
+
+Or via curl:
+
+```bash
+curl -s -X POST http://localhost:3000/v1/crabs \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: $(grep ADMIN_API_KEY .env | cut -d= -f2)" \
+  -d '{"name": "test-bot"}' | python3 -m json.tool
+```
+
+Copy the `token` — it's only shown once.
+
+---
+
+### Step 9 — Make a test tool call
+
+```bash
+curl -s -X POST http://localhost:3000/v1/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <agent-token>" \
+  -d '{
+    "service": "none",
+    "url": "https://httpbin.org/get",
+    "method": "GET"
+  }' | python3 -m json.tool
+```
+
+Check the **Audit Log** tab in Tide Pool to see the request logged.
+
+---
+
+### Useful dev commands
+
+```bash
+# Type check (backend)
 npx tsc --noEmit
 
-# Database migrations (requires running Postgres)
-npm run db:migrate
+# Type check (frontend)
+cd web && npx tsc --noEmit
 
-# Prisma Studio (DB browser)
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Open Prisma Studio (DB browser) at http://localhost:5555
 npm run db:studio
+
+# Stop the database
+docker compose down
 ```
+
+---
+
+### Full Docker stack (alternative)
+
+If you want everything in Docker (no local Node required):
+
+```bash
+docker compose up --build -d
+```
+
+Then build and serve the frontend from the same container:
+
+```bash
+cd web && npm run build && cd ..
+docker compose up --build -d
+```
+
+The full stack (including the pre-built UI) will be at `http://localhost:3000`.
 
 ---
 
@@ -272,22 +453,15 @@ npm run db:studio
 - [x] **Phase 1** — Crypto core (AES-256-GCM), Prisma schema, secrets + agent API
 - [x] **Phase 2** — Execute gateway: credential injection, HTTP proxy, SSRF guard, audit log
 - [x] **Phase 3** — Tide Pool UI: React dashboard, agent management, secret CRUD, paginated audit log
-- [x] **Security hardening (P0)** — Admin API key authentication on all management routes; tool allowlisting (`allowedTools` per agent)
-- [x] **Security hardening (P1)** — Complete SSRF guard (RFC-1918 ranges, IPv6, DNS rebinding); remove default DB password
-- [x] **Security hardening (P2)** — Rate limiting on `/v1/execute`; request timeout on outbound calls; token rotation
-
-### In Progress
-
-- [ ] **Clawbot provisioning** — `clawbots.yml` config, three workspace modes, `scripts/clawbot-add.sh` / `clawbot-remove.sh` / `clawbots-sync.sh`, auto-generated `docker-compose.clawbots.yml`
+- [x] **Security hardening** — Admin API key auth, SSRF guard (RFC-1918 + link-local + CGN), rate limiting, request timeout, token rotation, tool allowlisting
+- [x] **Phase 8A** — Model proxy (`POST /v1/chat/completions`), provider CRUD, Providers tab in Tide Pool
+- [x] **Phase 8B** — HTTP CONNECT proxy with priority-ordered domain rules, Network Rules + Settings tabs
+- [x] **Phase 8C** — Session cookie login gate, agent UI reverse proxy (`/agents/:name/*`), clawbot provisioning scripts
 
 ### Planned
 
-- [x] **Security hardening (P1)** — Document TLS/reverse proxy requirement
-- [ ] **Security hardening (P2)** — Shell injection in provisioning scripts (`<name>` param validation)
-- [ ] **Phase 4** — Python example agent: minimal clawbot that uses HermitClaw to call GitHub and Slack
-- [ ] **Phase 5** — Ingress routing: Signal / WhatsApp → agent webhook dispatch (post-MVP)
-- [ ] **Phase 6 — Activity Monitor** — Real-time agent activity feed in the Tide Pool UI. Live stream of in-flight and recent requests per agent, timeline view, anomaly highlighting (unusual target URLs, spike in request rate, error bursts), per-agent activity summary cards.
-- [ ] **Phase 7 — Risk Scanner** — Configurable inline scanning at the gateway. Classify outbound requests and inbound responses for risk before they execute or are returned to the agent. Block high-risk actions (e.g. DELETE requests to data services, bulk write operations) and high-risk responses (e.g. responses containing PII, credential-shaped strings, or anomalous payloads). Policy defined per agent or globally; violations logged and optionally alerted.
+- [ ] **Phase 8D** — Inbound routing: messaging channels (WhatsApp, Telegram, Slack) → agent webhook dispatch
+- [ ] **Phase 9** — Risk Scanner: inline classification of outbound requests and inbound responses; configurable block policies per agent
 
 ---
 
