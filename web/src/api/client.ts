@@ -1,4 +1,4 @@
-import type { Crab, CrabWithToken, Pearl, Tide, Pagination, ModelProvider } from './types.js';
+import type { Crab, CrabWithToken, Pearl, Tide, Pagination, ModelProvider, ConnectRule } from './types.js';
 
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
 
@@ -129,4 +129,42 @@ export async function getTides(params?: {
   if (params?.statusCode) qs.set('statusCode', String(params.statusCode));
   const query = qs.toString() ? `?${qs.toString()}` : '';
   return apiFetch(`/v1/tides${query}`);
+}
+
+// ---- Network Rules (Connect Rules) ----
+
+export async function getConnectRules(): Promise<ConnectRule[]> {
+  const data = await apiFetch<{ rules: ConnectRule[] }>('/v1/connect-rules');
+  return data.rules;
+}
+
+export async function createConnectRule(params: {
+  domain: string;
+  action: 'ALLOW' | 'DENY';
+  crabId?: string;
+  priority?: number;
+  note?: string;
+}): Promise<ConnectRule> {
+  return apiFetch<ConnectRule>('/v1/connect-rules', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function deleteConnectRule(id: string): Promise<void> {
+  return apiFetch<void>(`/v1/connect-rules/${id}`, { method: 'DELETE' });
+}
+
+// ---- System Settings ----
+
+export async function getSettings(): Promise<Record<string, string>> {
+  const data = await apiFetch<{ settings: Record<string, string> }>('/v1/settings');
+  return data.settings;
+}
+
+export async function updateSetting(key: string, value: string): Promise<void> {
+  return apiFetch<void>(`/v1/settings/${key}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  });
 }
