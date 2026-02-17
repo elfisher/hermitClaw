@@ -6,9 +6,15 @@ const privateIpRanges = [
   '10.0.0.0/8',
   '172.16.0.0/12',
   '192.168.0.0/16',
-  '127.0.0.0/8', // loopback
-  '::1/128', // IPv6 loopback
-  'fc00::/7', // IPv6 unique local addresses
+  '127.0.0.0/8',   // loopback
+  '::1/128',        // IPv6 loopback
+  'fc00::/7',       // IPv6 unique local addresses
+  // Link-local — covers 169.254.169.254, the cloud instance metadata endpoint
+  // used by AWS, GCP, Azure, and DigitalOcean to vend IAM credentials. An
+  // agent-controlled URL hitting this would exfiltrate host IAM tokens.
+  '169.254.0.0/16',
+  // Carrier-grade NAT (RFC 6598) — shared address space, treated as internal.
+  '100.64.0.0/10',
 ];
 
 function ipToBigInt(ip: string): bigint {

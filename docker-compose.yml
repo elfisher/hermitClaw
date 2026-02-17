@@ -26,8 +26,10 @@ services:
     image: postgres:16-alpine
     container_name: hermit_db
     restart: unless-stopped
-    ports:
-      - "5432:5432"
+    # No `ports:` here intentionally — the DB must not be reachable from the
+    # host network. hermit_shell connects via the Docker network name (hermit_db)
+    # over open_ocean. Exposing 5432 on the host would allow any local process
+    # (or network attacker) to connect directly with the DB credentials.
     environment:
       POSTGRES_USER: hermit
       POSTGRES_PASSWORD: ${DB_PASSWORD}

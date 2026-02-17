@@ -441,11 +441,11 @@ graph TD
 
 | ID | Severity | Description | Path to Fix |
 |----|----------|-------------|-------------|
-| G1 | **HIGH** | `hermit_db` port 5432 is exposed on host (docker-compose.yml:30) — any process on the host can connect with DB credentials | Remove `ports:` from hermit_db in docker-compose; only shell needs DB access |
+| G1 | ~~**HIGH**~~ **FIXED** | `hermit_db` port 5432 is exposed on host — any process on the host can connect with DB credentials | Removed `ports:` from hermit_db in docker-compose with explanatory comment |
 | G2 | **HIGH** | No TLS between browser/admin and Shell (port 3000 is plain HTTP) | Reverse proxy (nginx/Caddy) with TLS for any non-localhost deployment |
 | G3 | **MEDIUM** | No rate limiting on `POST /v1/chat/completions` — a compromised agent could exhaust LLM quota | Add per-crab rate limiting to model route (same pattern as execute route) |
 | G4 | **MEDIUM** | Admin API actions are not logged — no audit trail for who added/deleted secrets, crabs, or providers | Add tide entries for all management operations |
-| G5 | **MEDIUM** | SSRF guard does not cover `169.254.169.254` (AWS/GCP instance metadata) or `100.64.0.0/10` (RFC 6598 carrier-grade NAT) | Add these ranges to `privateIpRanges` in ssrf.ts |
+| G5 | ~~**MEDIUM**~~ **FIXED** | SSRF guard did not cover `169.254.169.254` (cloud IMDS) or `100.64.0.0/10` (RFC 6598 CGN) | Added both ranges to `privateIpRanges` in ssrf.ts with explanatory comments |
 | G6 | **MEDIUM** | DNS TOCTOU: URL is resolved once for SSRF check, then passed to undici which resolves again — a DNS rebinding attack can return different IPs | Re-resolve at connection time or use `undici` dispatcher with fixed resolved IP |
 | G7 | **LOW** | `sanitizeResponseBody()` uses regex to redact secrets from response bodies — unusual key naming (e.g. `_token`, `apikey`) may not be caught | Shift to allowlist approach or truncate response bodies more aggressively |
 | G8 | **LOW** | sand_bed network allows ARP-level communication between agent containers — agents could potentially ARP-scan for siblings | Use Docker `--isolate` or per-agent subnet (complex, low priority for single-host) |
