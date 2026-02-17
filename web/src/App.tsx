@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { Box, Drawer, AppBar, Toolbar, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, CssBaseline } from '@mui/material';
-import { Shield as AgentsIcon, VpnKey as SecretsIcon, History as AuditLogIcon, SmartToy as ProvidersIcon, Router as NetworkIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { useState, useEffect } from 'react';
+import { Box, Drawer, AppBar, Toolbar, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, CssBaseline, Button, CircularProgress } from '@mui/material';
+import { Shield as AgentsIcon, VpnKey as SecretsIcon, History as AuditLogIcon, SmartToy as ProvidersIcon, Router as NetworkIcon, Settings as SettingsIcon, Logout as LogoutIcon } from '@mui/icons-material';
 import { AgentsPage } from './pages/AgentsPage.js';
 import { SecretsPage } from './pages/SecretsPage.js';
 import { AuditLogPage } from './pages/AuditLogPage.js';
 import { ProvidersPage } from './pages/ProvidersPage.js';
 import { NetworkPage } from './pages/NetworkPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { LoginPage } from './pages/LoginPage.js';
+import { checkSession, logout } from './api/client.js';
 
 type Tab = 'agents' | 'secrets' | 'providers' | 'network' | 'audit' | 'settings';
 
@@ -23,15 +25,52 @@ const drawerWidth = 240;
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('agents');
+  // null = loading, false = not logged in, true = logged in
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
+  // Check session on mount
+  useEffect(() => {
+    checkSession().then((ok) => setAuthed(ok));
+  }, []);
+
+  const handleLogin = () => setAuthed(true);
+
+  const handleLogout = async () => {
+    await logout().catch(() => {});
+    setAuthed(false);
+  };
+
+  // Still checking
+  if (authed === null) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', bgcolor: 'pacific-blue' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Not logged in
+  if (!authed) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  // Logged in — main layout
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: 'midnight-blue' }}>
-        <Toolbar>
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
           <Typography variant="h6" noWrap component="div">
             🐚 HermitClaw
           </Typography>
+          <Button
+            startIcon={<LogoutIcon />}
+            onClick={handleLogout}
+            sx={{ color: 'slate-gray', textTransform: 'none' }}
+            size="small"
+          >
+            Sign out
+          </Button>
         </Toolbar>
       </AppBar>
       <Drawer

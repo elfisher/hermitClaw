@@ -2,6 +2,7 @@ export interface Crab {
   id: string;
   name: string;
   active: boolean;
+  uiPort: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +39,21 @@ export interface Pagination {
   limit: number;
   total: number;
   pages: number;
+}
+
+// ── Phase 8B — Network Rules + Settings ────────────────────────────────────
+
+export type RuleAction = 'ALLOW' | 'DENY';
+
+export interface ConnectRule {
+  id: string;
+  domain: string;
+  action: RuleAction;
+  crabId: string | null;
+  priority: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Phase 8A — Model Providers ──────────────────────────────────────────────

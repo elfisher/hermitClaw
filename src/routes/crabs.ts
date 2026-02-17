@@ -50,6 +50,7 @@ export async function crabsRoutes(app: FastifyInstance) {
         id: true,
         name: true,
         active: true,
+        uiPort: true,
         createdAt: true,
         updatedAt: true,
         // token intentionally omitted
@@ -58,6 +59,32 @@ export async function crabsRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ crabs });
+  });
+
+  /**
+   * PATCH /v1/crabs/:id
+   * Update mutable fields on a crab (currently: uiPort).
+   * Does not allow changing name, token, or active state (use /revoke for that).
+   */
+  app.patch<{
+    Params: { id: string };
+    Body: { uiPort?: number | null };
+  }>('/v1/crabs/:id', { preHandler: [requireAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { uiPort } = request.body ?? {};
+
+    const crab = await db.crab.findUnique({ where: { id } });
+    if (!crab) {
+      return reply.status(404).send({ error: `No agent found with id: ${id}` });
+    }
+
+    const updated = await db.crab.update({
+      where: { id },
+      data: { ...(uiPort !== undefined ? { uiPort } : {}) },
+      select: { id: true, name: true, active: true, uiPort: true, updatedAt: true },
+    });
+
+    return reply.send(updated);
   });
 
   /**

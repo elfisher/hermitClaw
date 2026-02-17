@@ -20,6 +20,7 @@ model Crab {
   expiresAt    DateTime?
   active       Boolean   @default(true)
   allowedTools Json?     // null = unrestricted; array of { url, method } objects
+  uiPort       Int?      // if set, the agent exposes a web UI on this port (sand_bed only)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

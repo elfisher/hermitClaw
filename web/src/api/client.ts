@@ -21,6 +21,29 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ---- Auth ----
+
+export async function login(apiKey: string): Promise<void> {
+  return apiFetch<void>('/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ apiKey }),
+    credentials: 'same-origin',
+  });
+}
+
+export async function logout(): Promise<void> {
+  return apiFetch<void>('/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
+}
+
+export async function checkSession(): Promise<boolean> {
+  try {
+    await apiFetch('/v1/auth/me', { credentials: 'same-origin' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ---- Agents (Crabs) ----
 
 export async function getAgents(): Promise<Crab[]> {

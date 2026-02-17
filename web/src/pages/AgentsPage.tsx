@@ -137,7 +137,19 @@ export function AgentsPage() {
                 <TableCell sx={{ color: 'slate-gray' }}>
                   {new Date(agent.createdAt).toLocaleDateString()}
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                  {agent.active && agent.uiPort && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      href={`/agents/${agent.name}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ color: 'alabaster', borderColor: 'slate-gray' }}
+                    >
+                      Open UI
+                    </Button>
+                  )}
                   {agent.active && (
                     <Button
                       variant="outlined"

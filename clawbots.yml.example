@@ -1,0 +1,22 @@
+# clawbots.yml — HermitClaw agent configuration
+#
+# Copy this file to clawbots.yml and edit as needed.
+# Run `./scripts/clawbots-sync.sh` to register all agents with HermitClaw.
+#
+# Each agent must:
+#   - Have a unique name (also becomes the Docker container name)
+#   - Run on the sand_bed Docker network (no direct internet access)
+#   - Use HTTP_PROXY=http://hermit_shell:3000 for outbound HTTPS
+#
+# uiPort (optional): if the agent exposes a web UI, set this to the internal
+# port number. HermitClaw will reverse-proxy it at /agents/<name>/ (session-gated).
+
+agents:
+  - name: openclaw
+    image: ghcr.io/openclaw/openclaw:latest   # replace with actual image
+    uiPort: 3001                               # openclaw's default web UI port
+
+  # Add more agents here:
+  # - name: my-research-bot
+  #   image: myregistry/research-bot:v1
+  #   uiPort: 8080

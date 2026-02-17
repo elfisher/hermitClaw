@@ -13,6 +13,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://hermit:securepass@hermit_db:5432/hermitclaw
       - MASTER_PEARL=${MASTER_PEARL}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
       - NODE_ENV=production
     depends_on:
       hermit_db:
@@ -44,6 +45,34 @@ services:
       timeout: 5s
       retries: 5
 
+  # --- AGENT CONTAINERS (clawbots) ---
+  # Each agent runs on sand_bed only (no direct internet access).
+  # Outbound HTTPS flows through the Hermit Shell CONNECT proxy.
+  # The Hermit Shell reverse-proxies the agent's web UI at /agents/<name>/.
+  #
+  # Example: OpenClaw agent.
+  # Uncomment and configure, or use scripts/clawbot-add.sh to provision automatically.
+
+  # openclaw:
+  #   image: ghcr.io/openclaw/openclaw:latest   # replace with actual image
+  #   container_name: openclaw
+  #   restart: unless-stopped
+  #   read_only: true                            # filesystem hardening
+  #   tmpfs:
+  #     - /tmp:size=128m,noexec,nosuid           # writable scratch space only
+  #   environment:
+  #     - HTTP_PROXY=http://hermit_shell:3000    # all outbound HTTPS via Hermit Shell
+  #     - HTTPS_PROXY=http://hermit_shell:3000
+  #     - NO_PROXY=hermit_shell                  # don't proxy the proxy itself
+  #     - HERMITCLAW_TOKEN=${OPENCLAW_TOKEN}     # agent bearer token
+  #     - HERMITCLAW_BASE_URL=http://hermit_shell:3000
+  #   volumes:
+  #     - openclaw_data:/data                    # persistent agent state
+  #   networks:
+  #     - sand_bed                               # isolated — no internet access
+  #   # No `ports:` — UI is accessed via the Hermit Shell reverse proxy at
+  #   # /agents/openclaw/. uiPort must be set on the Crab record in HermitClaw.
+
 networks:
   sand_bed:
     internal: true   # STRICT ISOLATION — no internet access
@@ -52,3 +81,4 @@ networks:
 
 volumes:
   hermit_data:
+  # openclaw_data:   # uncomment when adding the openclaw service

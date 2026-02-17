@@ -26,3 +26,9 @@ Thumbs.db
 
 # Temp
 .tmp/
+
+# Agent env files (contain bearer tokens — never commit)
+.clawbots/
+
+# User's active clawbot config (contains agent list; copy from clawbots.yml.example)
+clawbots.yml

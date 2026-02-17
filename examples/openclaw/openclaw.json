@@ -1,0 +1,22 @@
+{
+  "_comment": "OpenClaw HermitClaw provider configuration template.",
+  "_comment2": "Copy to your OpenClaw config directory and replace placeholder values.",
+  "providers": [
+    {
+      "id": "hermitclaw",
+      "name": "HermitClaw",
+      "type": "hermitclaw",
+      "baseUrl": "http://hermit_shell:3000",
+      "token": "${HERMITCLAW_TOKEN}",
+      "description": "Routes model calls through HermitClaw with credential injection and audit logging."
+    }
+  ],
+  "defaultProvider": "hermitclaw",
+  "_setup": [
+    "1. Run scripts/clawbot-add.sh openclaw 3001 to register this agent.",
+    "2. The script will write HERMITCLAW_TOKEN to .clawbots/openclaw.env.",
+    "3. Mount .clawbots/openclaw.env as --env-file when starting the container.",
+    "4. OpenClaw will use HTTP_PROXY=http://hermit_shell:3000 for outbound calls.",
+    "5. Access the UI at http://localhost:3000/agents/openclaw/ (after login)."
+  ]
+}
