@@ -1,8 +1,14 @@
 import type { Crab, CrabWithToken, Pearl, Tide, Pagination } from './types.js';
 
+const ADMIN_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ADMIN_KEY ? { 'x-admin-api-key': ADMIN_KEY } : {}),
+      ...init?.headers,
+    },
     ...init,
   });
 
@@ -63,11 +69,13 @@ export async function getTides(params?: {
   crabId?: string;
   page?: number;
   limit?: number;
+  statusCode?: number;
 }): Promise<{ tides: Tide[]; pagination: Pagination }> {
   const qs = new URLSearchParams();
   if (params?.crabId) qs.set('crabId', params.crabId);
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.statusCode) qs.set('statusCode', String(params.statusCode));
   const query = qs.toString() ? `?${qs.toString()}` : '';
   return apiFetch(`/v1/tides${query}`);
 }

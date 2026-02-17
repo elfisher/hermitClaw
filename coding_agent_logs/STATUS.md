@@ -6,9 +6,9 @@
 
 ## Current State
 
-**Active Phase:** Security Hardening (P1 and P2 completed)
-**Last Session:** `007-security-hardening`
-**Build status:** `tsc` clean. Vite build clean. 88/88 tests passing. Docker not yet verified (requires Docker daemon).
+**Active Phase:** UI Implementation
+**Last Session:** `007-ui-implementation`
+**Build status:** `tsc` clean. Vite build clean. 90/90 tests passing. Docker not yet verified (requires Docker daemon).
 
 ---
 
@@ -30,6 +30,7 @@ Full plan: [`PLAN.md`](../PLAN.md)
 - [x] **Security Hardening (P0)** — complete (`007-security-hardening.md`)
 - [x] **Security Hardening (P1)** — complete (partial, see backlog below)
 - [x] **Security Hardening (P2)** — complete (partial, see backlog below)
+- [x] **UI Implementation** — complete (`007-ui-implementation`)
 - [ ] **Clawbot Provisioning** — design complete, not yet built (see below)
 - [ ] **Phase 4 — Python Example Agent** — not started
 - [ ] **Phase 5 — Ingress Routing** — deferred (post-MVP)
@@ -271,3 +272,15 @@ hermitClaw/
 
 - Docker build not yet verified end-to-end (needs Docker daemon running — run `docker compose up` to verify)
 - `pino-pretty` should move to `devDependencies` before production release
+- **Tide Pool UI has no real login screen** — admin API key is currently injected at Vite
+  build time via `VITE_ADMIN_API_KEY` in `web/.env.local`. This is acceptable for local
+  dev but means the key is baked into the JS bundle. Before sharing the UI with others or
+  running it on a network, implement a proper login screen: prompt for the admin key on
+  first load, store it in `sessionStorage` (cleared on tab close), and read from there in
+  `apiFetch`. The `client.ts` change is already structured for this — swap
+  `import.meta.env.VITE_ADMIN_API_KEY` for a `getAdminKey()` helper that reads
+  `sessionStorage`.
+- **No `prisma/migrations/` directory** — schema was applied with `prisma db push` (dev
+  shortcut). Before production or multi-environment use, create a proper migration baseline:
+  `npx prisma migrate dev --name init`. This generates versioned SQL files that can be
+  replayed reliably on a fresh DB.

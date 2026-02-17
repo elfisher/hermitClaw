@@ -17,9 +17,7 @@ import {
   DialogContentText,
   DialogTitle,
   Alert,
-  IconButton,
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
 import { getAgents, createAgent, revokeAgent } from '../api/client.js';
 import type { Crab, CrabWithToken } from '../api/types.js';
 
@@ -100,7 +98,7 @@ export function AgentsPage() {
             Agent "{newToken.name}" registered. Copy this token — it won't be shown again.
           </Typography>
           <Box sx={{ p: 1, my: 1, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 1 }}>
-            <Typography variant="mono" sx={{ wordBreak: 'break-all' }}>
+            <Typography sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
               {newToken.token}
             </Typography>
           </Box>

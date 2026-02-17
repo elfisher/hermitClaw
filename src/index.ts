@@ -36,10 +36,10 @@ if (existsSync(webDistPath)) {
   await server.register(fastifyStatic, {
     root: webDistPath,
     prefix: '/',
-    wildcard: false,
   });
 
-  // SPA fallback — serve index.html for all non-API routes
+  // SPA fallback — serve index.html for unmatched non-API routes
+  // @fastify/static handles existing files; this catches client-side routes (e.g. /agents)
   server.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith('/v1/') || request.url === '/health') {
       return reply.status(404).send({ error: 'Not found' });
@@ -49,19 +49,6 @@ if (existsSync(webDistPath)) {
 } else {
   server.log.warn('web/dist not found — UI not available. Run: cd web && npm run build');
 }
-
-const start = async () => {
-  try {
-    const port = Number(process.env.PORT) || 3000;
-    const host = process.env.HOST || '0.0.0.0';
-    await server.listen({ port, host });
-  } catch (err) {
-    server.log.error(err);
-    process.exit(1);
-  }
-};
-
-start();
 
 const start = async () => {
   try {
