@@ -35,10 +35,10 @@ The system enforces a **zero-trust network topology** using Docker:
 
 | Component | Name | Description |
 |-----------|------|-------------|
-| **The Shell** | `hermit_shell` | Gateway service — the only component with internet access |
+| **The Hermit Shell** | `hermit_shell` | Gateway service — the only component with internet access |
 | **The Pearl Vault** | `hermit_db` | PostgreSQL database — all secrets encrypted at rest (AES-256-GCM) |
 | **The Tide Pool** | `web/` | React dashboard — manage secrets, view audit logs, kill switch |
-| **The Crab** | your agent | Sandboxed agent container — no internet, talks to Shell only |
+| **The Crab** | your agent | Sandboxed agent container — no internet, talks to Hermit Shell only |
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -53,7 +53,7 @@ The system enforces a **zero-trust network topology** using Docker:
 │  open_ocean (bridge — internet access)       │
 │         ▼                 ▼                  │
 │  ┌──────────────────────────────┐            │
-│  │      HermitClaw Shell        │            │
+│  │      Hermit Shell            │            │
 │  └──────────────┬───────────────┘            │
 │                 │                            │
 │  ┌──────────────▼───────────────┐            │
@@ -182,7 +182,7 @@ Agents can be configured with an `allowedTools` list, restricting them to call o
 The kill switch (`PATCH /v1/crabs/:id/revoke`) immediately invalidates an agent's token. Combined with the audit log, you can see exactly what an agent did and cut it off before further damage.
 
 **Rate Limiting**
-The `/v1/execute` endpoint is rate-limited per-agent (60 requests/minute), preventing a single runaway agent from exhausting downstream API limits or performing a Denial-of-Service attack on the Shell.
+The `/v1/execute` endpoint is rate-limited per-agent (60 requests/minute), preventing a single runaway agent from exhausting downstream API limits or performing a Denial-of-Service attack on the Hermit Shell.
 
 **Request Timeout**
 Outbound HTTP requests made by agents through HermitClaw now have a 30-second timeout, preventing slow or unresponsive upstream services from hanging the gateway indefinitely.
@@ -238,11 +238,11 @@ HermitClaw isolates agents from the internet, not from each other or from other 
 
 ## Deployment Considerations (TLS/Reverse Proxy)
 
-For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the HermitClaw Shell.
+For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the Hermit Shell.
 
-The HermitClaw Shell operates over plain HTTP. While this is acceptable for communication internal to a physically secure host, exposing plain HTTP over a network (even a local home network) can allow attackers to snoop on or tamper with traffic, including sensitive API keys and other data.
+The Hermit Shell operates over plain HTTP. While this is acceptable for communication internal to a physically secure host, exposing plain HTTP over a network (even a local home network) can allow attackers to snoop on or tamper with traffic, including sensitive API keys and other data.
 
-A reverse proxy configured with a valid SSL/TLS certificate will encrypt all traffic between clients (e.g., your browser accessing the Tide Pool UI, or agents on other hosts communicating with the Shell) and the HermitClaw server, providing confidentiality and integrity.
+A reverse proxy configured with a valid SSL/TLS certificate will encrypt all traffic between clients (e.g., your browser accessing the Tide Pool UI, or agents on other hosts communicating with the Hermit Shell) and the HermitClaw server, providing confidentiality and integrity.
 
 ---
 

@@ -8,7 +8,7 @@
 
 ## 1. System Overview
 
-HermitClaw is a self-hosted security gateway that stands between AI agent containers and the outside world. Agents have zero direct internet access; every outbound call, model inference, and credential use is mediated by the Shell.
+HermitClaw is a self-hosted security gateway that stands between AI agent containers and the outside world. Agents have zero direct internet access; every outbound call, model inference, and credential use is mediated by the Hermit Shell.
 
 ```mermaid
 flowchart TB
@@ -508,7 +508,7 @@ flowchart LR
 
 ### Immediate (before any non-localhost exposure)
 
-1. **[G1] Remove DB port exposure** — Delete `ports: - "5432:5432"` from `hermit_db` in `docker-compose.yml`. The shell connects via Docker network name, not host port.
+1. **[G1] Remove DB port exposure** — Delete `ports: - "5432:5432"` from `hermit_db` in `docker-compose.yml`. The Hermit Shell connects via Docker network name, not host port.
 
 2. **[G2] TLS termination** — Deploy behind nginx or Caddy with a certificate. Even a self-signed cert is better than plaintext for admin key transmission.
 

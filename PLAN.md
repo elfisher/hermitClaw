@@ -1,7 +1,7 @@
 # HermitClaw — Implementation Plan
 
 > **Goal:** Get a working vertical slice end-to-end as fast as possible.
-> **MVP Definition:** A sandboxed agent can call `POST /v1/execute`, the Shell injects a real credential, makes the API call, and returns the result — all audited.
+> **MVP Definition:** A sandboxed agent can call `POST /v1/execute`, the Hermit Shell injects a real credential, makes the API call, and returns the result — all audited.
 
 ---
 
@@ -14,7 +14,7 @@
 - [x] Fastify entry point (`src/index.ts`) — health check route only
 - [x] `docker-compose.yml` — Shell + Postgres, correct networks (`sand_bed`, `open_ocean`)
 - [x] `.env.example` with `MASTER_PEARL`, `DATABASE_URL`
-- [x] `Dockerfile` for the Shell service
+- [x] `Dockerfile` for the Hermit Shell service
 - [x] Verify: `docker compose up` — Shell responds on `:3000/health`
 
 ---
@@ -33,7 +33,7 @@
 ---
 
 ## Phase 2 — The Execute Gateway ← MVP Core
-**Goal:** An agent can call `/v1/execute` and the Shell proxies the request with injected credentials.
+**Goal:** An agent can call `/v1/execute` and the Hermit Shell proxies the request with injected credentials.
 
 - [x] `POST /v1/execute` route (`src/routes/execute.ts`)
 - [x] Agent auth middleware — validate `Authorization: Bearer <agent_token>` against `crabs` table

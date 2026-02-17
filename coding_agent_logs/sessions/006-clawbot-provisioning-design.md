@@ -165,7 +165,7 @@ examples/clawbot-base/
 - Fix: validate to `[a-z0-9-]` only before any use
 
 **No rate limiting on `/v1/execute`**
-- Runaway agent can exhaust downstream API rate limits or DoS the Shell
+- Runaway agent can exhaust downstream API rate limits or DoS the Hermit Shell
 - Fix: per-crab rate limit (e.g. 60 req/min) using fastify-rate-limit
 
 **No request timeout on outbound calls**

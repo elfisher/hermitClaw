@@ -22,8 +22,8 @@ framework. HermitClaw secures OpenClaw by sitting between it and the world.
 
 | Component | Metaphor | Role |
 |-----------|---------|------|
-| **The Shell** (HermitClaw gateway) | The shell | The only thing with access to the outside world. Validates, brokers, logs everything. |
-| **The Pearl Vault** (PostgreSQL) | The pearl | Encrypted credentials, only accessible by the Shell. |
+| **The Hermit Shell** (HermitClaw gateway) | The shell | The only thing with access to the outside world. Validates, brokers, logs everything. |
+| **The Pearl Vault** (PostgreSQL) | The pearl | Encrypted credentials, only accessible by the Hermit Shell. |
 | **The Crab** (Agent container) | The crab | Lives inside the shell. Cannot act without it. |
 | **The Tide Pool** (Web UI) | The tide pool | Human control plane for managing agents, secrets, providers, and policy. |
 
@@ -138,7 +138,7 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
 
 ## 7. Component Specifications
 
-### The Shell (`src/`)
+### The Hermit Shell (`src/`)
 
 - **Runtime:** Node.js 22 + TypeScript (strict, NodeNext modules)
 - **Framework:** Fastify v5
@@ -173,7 +173,7 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
 
 - React 18 + Vite 7 + Material-UI 7 + Tailwind 3
 - Pages: Login, Agents, Secrets, Audit Log, Providers, Network Rules, Settings
-- Served statically by the Shell at `GET /`
+- Served statically by the Hermit Shell at `GET /`
 
 ### Ollama (Host)
 

@@ -9,7 +9,7 @@
 
 ## Goal
 
-Implement the MVP core: an authenticated agent can call `POST /v1/execute`, the Shell looks up and decrypts the right credential, injects it into an outbound HTTP request, executes the call, logs everything to `tides`, and returns the result.
+Implement the MVP core: an authenticated agent can call `POST /v1/execute`, the Hermit Shell looks up and decrypts the right credential, injects it into an outbound HTTP request, executes the call, logs everything to `tides`, and returns the result.
 
 ---
 
@@ -64,14 +64,14 @@ Registered `executeRoutes` plugin.
 - **`authType` defaults to `bearer`** — the most common case; agents only need to specify it when using header/queryparam auth.
 - **Audit log failures are swallowed** — a broken DB connection must not stop tool calls from working. The gateway's primary job is proxying.
 - **`logTide` always fires**, even on error paths — this ensures the audit trail is complete, not just for successful calls.
-- **Response body returned at upstream's status code** — if GitHub returns a 404, the agent gets a 404. The Shell doesn't remap status codes.
+- **Response body returned at upstream's status code** — if GitHub returns a 404, the agent gets a 404. The Hermit Shell doesn't remap status codes.
 
 ---
 
 ## Security Notes
 
 - Decrypted secrets are never logged, stored in variables beyond their immediate use, or returned to the agent
-- The SSRF guard prevents agents from using the Shell to probe internal Docker services
+- The SSRF guard prevents agents from using the Hermit Shell to probe internal Docker services
 - Response bodies are sanitized before hitting the audit log to prevent credential leakage via API responses
 
 ---

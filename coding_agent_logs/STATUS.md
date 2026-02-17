@@ -14,7 +14,7 @@
 
 ## Project Summary
 
-HermitClaw is a self-hosted, secure tool execution gateway and credential vault for AI agents ("Clawbots"). Agents are sandboxed with no internet access and must route all tool calls through the Shell, which injects credentials and audits everything.
+HermitClaw is a self-hosted, secure tool execution gateway and credential vault for AI agents ("Clawbots"). Agents are sandboxed with no internet access and must route all tool calls through the Hermit Shell, which injects credentials and audits everything.
 
 Full design: [`DESIGN.md`](../DESIGN.md)
 Full plan: [`PLAN.md`](../PLAN.md)
@@ -261,7 +261,7 @@ examples/clawbot-base/
   `[a-z0-9-]` only before use in shell commands or YAML generation. (SKIPPED)
 
 - [x] **No rate limiting on `/v1/execute`** — runaway agent can exhaust downstream API
-  rate limits or DoS the Shell. **Fix:** per-crab rate limit (e.g. 60 req/min).
+  rate limits or DoS the Hermit Shell. **Fix:** per-crab rate limit (e.g. 60 req/min).
 
 - [x] **No request timeout on outbound calls** — slow upstream hangs connection indefinitely.
   **Fix:** 30s timeout on undici requests.

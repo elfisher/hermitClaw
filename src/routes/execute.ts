@@ -30,7 +30,7 @@ export async function executeRoutes(app: FastifyInstance) {
    * POST /v1/execute
    *
    * The core gateway route. An authenticated agent sends a tool call;
-   * the Shell looks up + decrypts the credential, injects it, executes
+   * the Hermit Shell looks up + decrypts the credential, injects it, executes
    * the HTTP request, logs everything, and returns the result.
    */
   app.post<{ Body: ExecuteBody }>(

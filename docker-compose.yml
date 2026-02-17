@@ -1,7 +1,7 @@
 services:
   # --- THE HERMITCLAW INFRASTRUCTURE ---
 
-  # 1. The Shell (Gateway + UI)
+  # 1. The Hermit Shell (Gateway + UI)
   hermit_shell:
     build:
       context: .
