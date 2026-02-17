@@ -406,6 +406,111 @@ The full stack (including the pre-built UI) will be at `http://localhost:3000`.
 
 ---
 
+## Using Ollama on Mac with HermitClaw
+
+Ollama runs natively on Mac (Apple Silicon or Intel). HermitClaw's model proxy routes agent model calls to it — the agent never talks to Ollama directly.
+
+### The networking problem
+
+When the backend runs locally (`npm run dev`), `localhost:11434` works fine. But when running inside Docker, the container's `localhost` is the container itself — not your Mac. Docker Desktop solves this with the special hostname `host.docker.internal`, which always resolves to your Mac's IP from inside any container.
+
+Ollama by default binds to `127.0.0.1:11434` (loopback only). Docker cannot reach a loopback address on the host, so you need to tell Ollama to also listen on the Docker bridge interface.
+
+---
+
+### Step 1 — Install Ollama
+
+```bash
+brew install ollama
+```
+
+Or download from [ollama.com](https://ollama.com).
+
+---
+
+### Step 2 — Bind Ollama to all interfaces
+
+By default Ollama only listens on `127.0.0.1`. Set `OLLAMA_HOST` so Docker containers can reach it:
+
+**Option A — for the current terminal session only:**
+```bash
+OLLAMA_HOST=0.0.0.0 ollama serve
+```
+
+**Option B — persistent (add to `~/.zshrc` or `~/.bashrc`):**
+```bash
+export OLLAMA_HOST=0.0.0.0
+```
+Then restart Ollama (quit the menu-bar app and relaunch, or restart the service).
+
+> **Security note:** `0.0.0.0` means Ollama is reachable from other devices on your local network, not just Docker. Ollama has no authentication. If you're on a shared or public network, add a macOS firewall rule to restrict port 11434 to localhost + Docker's subnet, or keep `OLLAMA_HOST=127.0.0.1` and only use HermitClaw in local (non-Docker) mode.
+
+---
+
+### Step 3 — Pull a model
+
+```bash
+ollama pull llama3.2        # ~2GB, fast on Apple Silicon
+# or
+ollama pull mistral
+ollama pull qwen2.5-coder   # good for coding agents
+```
+
+Verify it's running:
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+---
+
+### Step 4 — Set `OLLAMA_BASE_URL` in `.env`
+
+This is already in `.env.example`. Confirm it's in your `.env`:
+
+```
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+> If running the backend locally (not in Docker), you can use `http://localhost:11434` instead — but `host.docker.internal` also works on Mac even outside Docker.
+
+---
+
+### Step 5 — Add Ollama as a provider in Tide Pool
+
+1. Open Tide Pool → **Providers → Add Provider**
+2. Fill in:
+
+| Field | Value |
+|-------|-------|
+| Name | `ollama-local` (or any name) |
+| Base URL | `http://host.docker.internal:11434` |
+| Protocol | `OPENAI` (Ollama is OpenAI-compatible) |
+| Scope | `GLOBAL` (all agents can use it) |
+| API Key Secret | *(leave blank — Ollama needs no auth)* |
+
+3. Click **Add Provider**.
+
+---
+
+### Step 6 — Test from an agent
+
+Any agent with a bearer token can now call:
+
+```bash
+curl -s -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <agent-token>" \
+  -d '{
+    "model": "llama3.2",
+    "messages": [{"role": "user", "content": "Say hello in one sentence."}]
+  }' | python3 -m json.tool
+```
+
+HermitClaw routes the call to Ollama, logs it in the Audit Log, and returns the response. The agent never touches Ollama directly.
+
+---
+
 ## Roadmap
 
 ### Completed
