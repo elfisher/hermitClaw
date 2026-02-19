@@ -49,6 +49,21 @@ const KNOWN_SETTINGS: SettingMeta[] = [
       { value: '72', label: '72 hours' },
     ],
   },
+  {
+    key: 'audit_log_retention_days',
+    label: 'Audit Log Retention',
+    description:
+      'How long to keep audit log entries. Entries older than the selected period are deleted ' +
+      'automatically once per day. Set to "Forever" to disable pruning.',
+    type: 'select',
+    options: [
+      { value: '0', label: 'Forever (no pruning)' },
+      { value: '7', label: '7 days' },
+      { value: '30', label: '30 days' },
+      { value: '90', label: '90 days' },
+      { value: '365', label: '1 year' },
+    ],
+  },
 ];
 
 export function SettingsPage() {

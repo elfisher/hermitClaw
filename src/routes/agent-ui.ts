@@ -33,7 +33,9 @@ export async function agentUiRoutes(app: FastifyInstance) {
   // addContentTypeParser) but the cleanest approach is to register a catch-all
   // route on all methods.
 
-  const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
+  // HEAD is intentionally omitted — Fastify v5 auto-registers HEAD for every GET route.
+  // Explicitly registering HEAD would cause a FST_ERR_DUPLICATED_ROUTE crash.
+  const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
   for (const method of methods) {
     app.route({

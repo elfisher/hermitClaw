@@ -24,6 +24,7 @@ interface CreateProviderBody {
   protocol?: 'OPENAI' | 'ANTHROPIC';
   pearlService?: string;
   scope?: 'GLOBAL' | 'RESTRICTED';
+  active?: boolean;
 }
 
 interface GrantAccessBody {
@@ -73,7 +74,7 @@ export async function modelRoutes(app: FastifyInstance) {
     { preHandler: [requireAdmin] },
     async (request, reply) => {
       const { id } = request.params;
-      const { name, baseUrl, protocol, pearlService, scope } = request.body;
+      const { name, baseUrl, protocol, pearlService, scope, active } = request.body;
 
       if (baseUrl) {
         try {
@@ -94,6 +95,7 @@ export async function modelRoutes(app: FastifyInstance) {
           ...(protocol !== undefined && { protocol }),
           ...(pearlService !== undefined && { pearlService: pearlService || null }),
           ...(scope !== undefined && { scope }),
+          ...(active !== undefined && { active }),
         },
       });
 

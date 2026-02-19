@@ -8,7 +8,7 @@ import { ProvidersPage } from './pages/ProvidersPage.js';
 import { NetworkPage } from './pages/NetworkPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { LoginPage } from './pages/LoginPage.js';
-import { checkSession, logout } from './api/client.js';
+import { checkSession, login, logout } from './api/client.js';
 
 type Tab = 'agents' | 'secrets' | 'providers' | 'network' | 'audit' | 'settings';
 
@@ -28,9 +28,17 @@ export default function App() {
   // null = loading, false = not logged in, true = logged in
   const [authed, setAuthed] = useState<boolean | null>(null);
 
-  // Check session on mount
+  // Check session on mount.
+  // In dev: if VITE_ADMIN_API_KEY is baked in, auto-login so the login screen is skipped.
   useEffect(() => {
-    checkSession().then((ok) => setAuthed(ok));
+    const devKey = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
+    checkSession().then(async (ok) => {
+      if (ok) { setAuthed(true); return; }
+      if (devKey) {
+        try { await login(devKey); setAuthed(true); return; } catch {}
+      }
+      setAuthed(false);
+    });
   }, []);
 
   const handleLogin = () => setAuthed(true);

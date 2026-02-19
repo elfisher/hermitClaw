@@ -12,6 +12,7 @@ import { modelRoutes } from './routes/model.js';
 import { connectRoutes } from './routes/connect.js';
 import { authRoutes } from './routes/auth.js';
 import { agentUiRoutes } from './routes/agent-ui.js';
+import { pruneOldTides } from './lib/retention.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +68,15 @@ const start = async () => {
     const port = Number(process.env.PORT) || 3000;
     const host = process.env.HOST || '0.0.0.0';
     await server.listen({ port, host });
+
+    // Schedule audit log retention pruning every 24 hours.
+    // NOT run on startup — only on the interval.
+    const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+    setInterval(() => {
+      pruneOldTides().catch((err) =>
+        server.log.error({ err }, 'audit log retention pruning failed'),
+      );
+    }, RETENTION_INTERVAL_MS);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

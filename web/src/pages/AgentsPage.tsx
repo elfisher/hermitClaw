@@ -17,6 +17,8 @@ import {
   DialogContentText,
   DialogTitle,
   Alert,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { getAgents, createAgent, revokeAgent } from '../api/client.js';
 import type { Crab, CrabWithToken } from '../api/types.js';
@@ -29,6 +31,7 @@ export function AgentsPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [newToken, setNewToken] = useState<CrabWithToken | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const [agentToRevoke, setAgentToRevoke] = useState<Crab | null>(null);
 
   const load = useCallback(async () => {
@@ -51,6 +54,7 @@ export function AgentsPage() {
     try {
       const created = await createAgent(newName.trim());
       setNewToken(created);
+      setTokenCopied(false);
       setNewName('');
       setShowForm(false);
       await load();
@@ -92,18 +96,50 @@ export function AgentsPage() {
         </Alert>
       )}
 
-      {newToken && (
-        <Alert severity="success" sx={{ mb: 4 }} onClose={() => setNewToken(null)}>
-          <Typography variant="body2">
-            Agent "{newToken.name}" registered. Copy this token — it won't be shown again.
-          </Typography>
-          <Box sx={{ p: 1, my: 1, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 1 }}>
-            <Typography sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-              {newToken.token}
-            </Typography>
+      {/* Token reveal dialog — requires explicit acknowledgment before closing */}
+      <Dialog open={!!newToken} maxWidth="sm" fullWidth disableEscapeKeyDown>
+        <DialogTitle>Agent Registered — Save Your Token</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Agent <strong>{newToken?.name}</strong> has been registered. Copy the bearer token below —
+            it will <strong>not</strong> be shown again.
+          </DialogContentText>
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: 'rgba(0,0,0,0.35)',
+              borderRadius: 1,
+              fontFamily: 'Roboto Mono',
+              fontSize: 13,
+              wordBreak: 'break-all',
+              userSelect: 'all',
+              cursor: 'text',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            {newToken?.token}
           </Box>
-        </Alert>
-      )}
+          <FormControlLabel
+            sx={{ mt: 2 }}
+            control={
+              <Checkbox
+                checked={tokenCopied}
+                onChange={(e) => setTokenCopied(e.target.checked)}
+              />
+            }
+            label="I have copied my token"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            disabled={!tokenCopied}
+            onClick={() => { setNewToken(null); setTokenCopied(false); }}
+          >
+            Done
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>

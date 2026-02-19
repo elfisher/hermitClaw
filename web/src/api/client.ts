@@ -114,6 +114,7 @@ export async function updateProvider(
     protocol: 'OPENAI' | 'ANTHROPIC';
     pearlService: string;
     scope: 'GLOBAL' | 'RESTRICTED';
+    active: boolean;
   }>,
 ): Promise<ModelProvider> {
   return apiFetch<ModelProvider>(`/v1/providers/${id}`, {

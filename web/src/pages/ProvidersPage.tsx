@@ -23,7 +23,7 @@ import {
   InputLabel,
   Tooltip,
 } from '@mui/material';
-import { getProviders, createProvider, deleteProvider } from '../api/client.js';
+import { getProviders, createProvider, updateProvider, deleteProvider } from '../api/client.js';
 import type { ModelProvider } from '../api/types.js';
 
 interface FormState {
@@ -49,6 +49,7 @@ export function ProvidersPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<ModelProvider | null>(null);
 
   const load = useCallback(async () => {
@@ -83,6 +84,18 @@ export function ProvidersPage() {
       setError(e instanceof Error ? e.message : 'Failed to create provider');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleActive = async (p: ModelProvider) => {
+    setToggling(p.id);
+    try {
+      await updateProvider(p.id, { active: !p.active });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update provider');
+    } finally {
+      setToggling(null);
     }
   };
 
@@ -179,7 +192,23 @@ export function ProvidersPage() {
                     color={p.active ? 'success' : 'default'}
                   />
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color={p.active ? 'warning' : 'success'}
+                    disabled={toggling === p.id}
+                    onClick={() => handleToggleActive(p)}
+                    sx={{ minWidth: 80 }}
+                  >
+                    {toggling === p.id ? (
+                      <CircularProgress size={16} />
+                    ) : p.active ? (
+                      'Disable'
+                    ) : (
+                      'Enable'
+                    )}
+                  </Button>
                   <Button
                     variant="outlined"
                     color="error"

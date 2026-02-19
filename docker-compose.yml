@@ -11,10 +11,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://hermit:securepass@hermit_db:5432/hermitclaw
+      - DATABASE_URL=postgresql://hermit:${DB_PASSWORD}@hermit_db:5432/hermitclaw
       - MASTER_PEARL=${MASTER_PEARL}
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - NODE_ENV=production
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     depends_on:
       hermit_db:
         condition: service_healthy
