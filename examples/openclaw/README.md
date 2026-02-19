@@ -187,17 +187,10 @@ provider → **Grant Access** → select `openclaw`.
 
 ## Server Deployment (Production)
 
-For a production server, the [openclaw-ansible](https://github.com/openclaw/openclaw-ansible)
-installer provisions a hardened Linux host with:
-
-- UFW firewall (only SSH + Tailscale open — no direct port exposure)
-- Tailscale VPN for remote access to Tide Pool and OpenClaw UI
-- Fail2ban SSH protection
-- Systemd hardening (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem`)
-
-Deploy HermitClaw on the same server. Both services share the `sand_bed` Docker network.
-Access Tide Pool and OpenClaw UI through your Tailscale address — never expose port 3000
-directly to the internet.
+For server-side deployment and hardening best practices, follow the
+[OpenClaw installation docs](https://docs.openclaw.ai/install/docker). Deploy HermitClaw
+on the same host. Both services share the `sand_bed` Docker network. Never expose port 3000
+directly to the internet — use a reverse proxy with TLS or a VPN (e.g. Tailscale).
 
 ---
 

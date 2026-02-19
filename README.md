@@ -244,9 +244,8 @@ Telegram, Discord, iMessage, Slack) to an AI agent called Pi. Pi can run code, b
 web, execute bash commands, and automate tasks — which makes a security layer like HermitClaw
 essential.
 
-> **Note:** Bare-metal macOS support was deprecated by OpenClaw in early 2026. The recommended
-> path is a Linux server or Docker container. See
-> [openclaw-ansible](https://github.com/openclaw/openclaw-ansible) for a hardened server setup.
+> **Note:** Bare-metal macOS support was deprecated by OpenClaw in early 2026. For server-side
+> deployment, follow the [OpenClaw installation docs](https://docs.openclaw.ai/install/docker).
 
 ### How it works
 

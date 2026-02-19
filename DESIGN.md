@@ -263,22 +263,12 @@ Access Tide Pool at `http://localhost:3000`. OpenClaw UI at `/agents/openclaw/`.
 
 Use a reverse proxy (nginx/Caddy) with TLS for any network-accessible deployment.
 
-### Production — Linux Server (Ansible + Tailscale)
+### Production — Linux Server
 
-The recommended production path for OpenClaw is a hardened Linux server provisioned with
-[openclaw-ansible](https://github.com/openclaw/openclaw-ansible):
-
-- UFW firewall: only SSH (22) and Tailscale (41641/UDP) open — no direct port exposure
-- Tailscale VPN for secure remote access to Tide Pool and OpenClaw Control UI
-- Fail2ban SSH protection, unattended-upgrades, systemd service hardening
-- Docker CE for OpenClaw sandbox containers
-
-Deploy HermitClaw on the same server. Both services share the `sand_bed` Docker network.
-Access Tide Pool through your Tailscale address — never expose port 3000 to the public internet.
-
-> **macOS note:** OpenClaw deprecated bare-metal macOS support in early 2026 due to the
-> security risks of required system-level permissions. The Docker or Linux server path is
-> strongly preferred.
+For server-side deployment and hardening, follow the
+[OpenClaw installation docs](https://docs.openclaw.ai/install/docker). Deploy HermitClaw
+on the same host so both services share the `sand_bed` Docker network. Never expose port
+3000 directly to the internet — use a reverse proxy with TLS or a VPN (e.g. Tailscale).
 
 ---
 
