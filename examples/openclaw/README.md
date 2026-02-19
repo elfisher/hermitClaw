@@ -84,6 +84,11 @@ NO_PROXY=hermit_shell
 
 > **Save the token printed to screen** — it is only shown once. The env file also contains it.
 
+`HTTP_PROXY` and `HTTPS_PROXY` are picked up natively by OpenClaw's Pi agent (it uses `undici`
+internally and respects these variables for all API and channel traffic). **Note:** Pi's browser
+automation and sandbox tool environments may need separate proxy configuration — core agent
+traffic is fully covered, but browser-initiated requests may bypass this.
+
 ---
 
 ### Step 2 — Configure OpenClaw to use HermitClaw as its LLM provider
@@ -94,9 +99,14 @@ Copy `examples/openclaw/openclaw.json` to (or merge into) `~/.openclaw/openclaw.
 cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
 ```
 
-Edit the `models` array to match the models you have configured in your HermitClaw providers.
-For a local Ollama setup, `llama3.1` and `qwen2.5-coder` are common. The model `id` must match
-the model tag as Ollama (or your cloud provider) returns it.
+The config has two sections that work together:
+
+- **`agents.defaults.model.primary`** — sets the model Pi uses by default, in `"provider/model"` format
+- **`models.providers.hermitclaw`** — registers HermitClaw as a provider with your models list
+
+Edit both to match the models you have configured in HermitClaw → Providers. For a local Ollama
+setup, `llama3.1` and `qwen2.5-coder` are common starting points. Model `id` values must match
+the model tags as Ollama (or your cloud provider) returns them.
 
 **Two tokens are in play — don't confuse them:**
 

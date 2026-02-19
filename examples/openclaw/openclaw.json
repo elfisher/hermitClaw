@@ -48,6 +48,27 @@
 // from OpenClaw (channel calls, web browsing, tool calls) flows through HermitClaw's
 // CONNECT proxy. Configure domain allow/deny rules in Tide Pool → Network Rules.
 {
+  // ── Agent defaults ─────────────────────────────────────────────────────────
+  // Tells OpenClaw which provider/model to use by default.
+  // Format is "provider/model" where provider matches the key in models.providers.
+  // Update "llama3.1" to whichever model you want Pi to use by default.
+  agents: {
+    defaults: {
+      model: {
+        primary: "hermitclaw/llama3.1",
+        // Optional fallback if primary is unavailable:
+        // fallbacks: ["hermitclaw/qwen2.5-coder"],
+      },
+      // Allowlist which models Pi can select. Alias is shown in the UI.
+      models: {
+        "hermitclaw/llama3.1": { alias: "Llama 3.1" },
+        "hermitclaw/qwen2.5-coder": { alias: "Qwen 2.5 Coder" },
+        // "hermitclaw/claude-sonnet-4-5": { alias: "Claude Sonnet" },
+      },
+    },
+  },
+
+  // ── Model providers ────────────────────────────────────────────────────────
   models: {
     // "merge" adds this provider alongside existing ones rather than replacing them.
     mode: "merge",
