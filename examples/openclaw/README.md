@@ -85,9 +85,13 @@ NO_PROXY=hermit_shell
 > **Save the token printed to screen** — it is only shown once. The env file also contains it.
 
 `HTTP_PROXY` and `HTTPS_PROXY` are picked up natively by OpenClaw's Pi agent (it uses `undici`
-internally and respects these variables for all API and channel traffic). **Note:** Pi's browser
-automation and sandbox tool environments may need separate proxy configuration — core agent
-traffic is fully covered, but browser-initiated requests may bypass this.
+internally and respects these variables for all API and channel traffic).
+
+**Browser automation note:** Pi's Chromium instance may not inherit `HTTP_PROXY`. However,
+this is a functionality concern, not a security gap — `sand_bed` is declared `internal: true`,
+meaning containers have no default gateway and no route to the internet. A browser that ignores
+`HTTP_PROXY` won't bypass HermitClaw; it will simply fail to connect. For browser tools to work,
+OpenClaw must launch Chromium with `--proxy-server=http://hermit_shell:3000`.
 
 ---
 
