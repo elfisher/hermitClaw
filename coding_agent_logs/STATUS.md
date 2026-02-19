@@ -6,8 +6,8 @@
 
 ## Current State
 
-**Active Phase:** Phases 8A–8C complete. Next: end-to-end test with real agent container, then Phase 8D (Inbound Routing) or deferred.
-**Last Session:** `010-phase-8bc-connect-proxy-session-auth`
+**Active Phase:** Phases 8A–8C complete + post-8C UX improvements. Next: OpenClaw E2E smoke test, then Phase 8D.
+**Last Session:** `011-ux-improvements-and-openclaw-docs` (this session)
 **Build status:** `tsc` clean (backend + frontend). 90/90 tests passing. `npm run dev` one-command startup working.
 
 ---
@@ -40,16 +40,42 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ---
 
-## What To Do Next
+## Recent Work (this session)
 
-**Phases 8A–8C are complete.** The stack is ready for an end-to-end test with a real OpenClaw container.
+- **Dev UX improvements:** Auto-login with `VITE_ADMIN_API_KEY`, sticky token dialog (checkbox gate)
+- **Audit log detail drawer:** Clickable rows open right-side drawer with formatted request/response
+- **Audit log retention:** `audit_log_retention_days` setting, 24h interval pruning (no startup prune)
+- **Provider enable/disable toggle:** `PATCH /v1/providers/:id` now accepts `active`, UI toggle added
+- **Docker fixes:** Prisma schema copy order in Dockerfile, Fastify duplicate HEAD route, docker-compose env vars
+- **OpenClaw integration docs:** Researched OpenClaw architecture; rewrote `examples/openclaw/openclaw.json` with correct JSON5 format; added `examples/openclaw/README.md` full integration guide; updated README.md and DESIGN.md
+
+**Key OpenClaw findings:**
+- OpenClaw is a messaging gateway (WhatsApp/Telegram/Discord → Pi AI agent), not a generic agent
+- macOS bare-metal deprecated Feb 2026; server deployment (Docker/Ansible+Tailscale) is the path
+- LLM config: `models.providers.hermitclaw.baseUrl = "http://hermit_shell:3000/v1"`, `apiKey = "${HERMITCLAW_TOKEN}"`
+- `HTTP_PROXY`/`HTTPS_PROXY` in `.clawbots/openclaw.env` routes all OpenClaw egress through HermitClaw CONNECT proxy natively
+- Two tokens: `HERMITCLAW_TOKEN` (HermitClaw crab auth) vs OpenClaw's own gateway token (unrelated)
+
+---
+
+## What To Do Next
 
 **Recommended next steps (in order):**
 
-1. **End-to-end smoke test** — Run `scripts/clawbot-add.sh openclaw --ui-port 18789`, start the stack with `npm run dev`, and verify:
-   - Tide Pool login gate works (session cookie)
+1. **OpenClaw E2E smoke test** — Full end-to-end verification:
+   ```bash
+   docker compose up -d
+   ./scripts/clawbot-add.sh openclaw 18789
+   cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
+   # Edit models array to match your Ollama setup
+   docker run -d --name openclaw --network hermitclaw_sand_bed \
+     --env-file .clawbots/openclaw.env \
+     -v ~/.openclaw:/home/node/.openclaw openclaw:local
+   ```
+   Verify:
+   - Tide Pool login gate works
    - `/agents/openclaw/` reverse proxy reaches the OpenClaw UI
-   - `/v1/chat/completions` routes to Ollama
+   - `/v1/chat/completions` routes to Ollama (check Audit Log)
    - CONNECT proxy enforces domain rules
 
 2. **Phase 8D — Inbound Routing** — `POST /v1/ingress/:provider` → lookup route → forward to agent on `sand_bed`. Design already in PLAN.md.

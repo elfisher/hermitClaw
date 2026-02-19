@@ -61,6 +61,19 @@ framework. HermitClaw secures OpenClaw by sitting between it and the world.
 
 ## 4. Traffic Types
 
+### OpenClaw tokens — important distinction
+
+OpenClaw operates with two separate tokens:
+
+| Token | Lives in | Purpose |
+|---|---|---|
+| **HermitClaw crab token** (`HERMITCLAW_TOKEN`) | `.clawbots/openclaw.env` | Authenticates OpenClaw to HermitClaw for model calls and is used as the `apiKey` in `openclaw.json`. Written by `clawbot-add.sh`. |
+| **OpenClaw gateway token** | `~/.openclaw/.env` | Authenticates users to OpenClaw's own Control UI. Managed entirely by OpenClaw. Unrelated to HermitClaw. |
+
+These must not be confused. `HTTP_PROXY` and `HTTPS_PROXY` (also in `.clawbots/openclaw.env`)
+cause all of OpenClaw's outbound traffic to route through HermitClaw's CONNECT proxy — Node.js
+honours these natively, requiring zero changes to OpenClaw's code.
+
 ### A. Model API Calls (Application-Layer Proxy)
 
 Agent calls `POST /v1/chat/completions` with its crab token. HermitClaw:
@@ -231,16 +244,41 @@ npm test
 `npm run dev` (via `scripts/dev.sh`) checks `.env`, starts `hermit_db`, waits for healthy,
 runs `prisma db push`, then starts backend (`tsx watch`) and frontend (`Vite`) concurrently.
 
-### Production
+### Production — Docker (single host)
 
 ```bash
-docker compose up -d          # hermit_shell + hermit_db
-scripts/clawbot-add.sh openclaw --ui-port 18789
-docker compose up -d openclaw
+docker compose up -d                              # hermit_shell + hermit_db
+./scripts/clawbot-add.sh openclaw 18789           # register OpenClaw, write .clawbots/openclaw.env
+cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json  # configure OpenClaw provider
+
+docker run -d \
+  --name openclaw \
+  --network hermitclaw_sand_bed \
+  --env-file .clawbots/openclaw.env \
+  -v ~/.openclaw:/home/node/.openclaw \
+  openclaw:local
 ```
 
-Access Tide Pool at `http://localhost:3000`. Use a reverse proxy (nginx/Caddy) with TLS
-for any network-accessible deployment.
+Access Tide Pool at `http://localhost:3000`. OpenClaw UI at `/agents/openclaw/`.
+
+Use a reverse proxy (nginx/Caddy) with TLS for any network-accessible deployment.
+
+### Production — Linux Server (Ansible + Tailscale)
+
+The recommended production path for OpenClaw is a hardened Linux server provisioned with
+[openclaw-ansible](https://github.com/openclaw/openclaw-ansible):
+
+- UFW firewall: only SSH (22) and Tailscale (41641/UDP) open — no direct port exposure
+- Tailscale VPN for secure remote access to Tide Pool and OpenClaw Control UI
+- Fail2ban SSH protection, unattended-upgrades, systemd service hardening
+- Docker CE for OpenClaw sandbox containers
+
+Deploy HermitClaw on the same server. Both services share the `sand_bed` Docker network.
+Access Tide Pool through your Tailscale address — never expose port 3000 to the public internet.
+
+> **macOS note:** OpenClaw deprecated bare-metal macOS support in early 2026 due to the
+> security risks of required system-level permissions. The Docker or Linux server path is
+> strongly preferred.
 
 ---
 

@@ -1,22 +1,109 @@
+// OpenClaw provider configuration for HermitClaw integration.
+//
+// USAGE
+// -----
+// Merge the "models" block below into your ~/.openclaw/openclaw.json.
+// If that file does not exist yet, this file can be used as-is.
+//
+// SETUP
+// -----
+// 1. Start HermitClaw:
+//      docker compose up -d
+//
+// 2. Register OpenClaw as an agent (writes .clawbots/openclaw.env):
+//      ./scripts/clawbot-add.sh openclaw 18789
+//
+// 3. Copy this file to (or merge into) ~/.openclaw/openclaw.json.
+//    Replace model IDs with the models you have configured in HermitClaw.
+//
+// 4. Start OpenClaw with the network and env file:
+//      docker run -d \
+//        --name openclaw \
+//        --network hermitclaw_sand_bed \
+//        --env-file .clawbots/openclaw.env \
+//        -v ~/.openclaw:/home/node/.openclaw \
+//        openclaw:local
+//
+//    Or if using OpenClaw's docker-compose, add to your service:
+//      networks: [hermitclaw_sand_bed]
+//      env_file: /path/to/hermitclaw/.clawbots/openclaw.env
+//
+// 5. Access OpenClaw UI via Tide Pool:
+//      http://localhost:3000/agents/openclaw/
+//
+// TOKENS
+// ------
+// Two separate tokens are in play:
+//   - HERMITCLAW_TOKEN  (in .clawbots/openclaw.env)
+//     HermitClaw agent bearer token. Used as the apiKey below.
+//     OpenClaw presents this when calling /v1/chat/completions.
+//
+//   - OpenClaw gateway token  (in ~/.openclaw/.env, managed by OpenClaw)
+//     OpenClaw's own admin token for its Control UI. Unrelated to HermitClaw.
+//
+// EGRESS PROXY
+// ------------
+// .clawbots/openclaw.env sets HTTP_PROXY and HTTPS_PROXY to hermit_shell:3000.
+// Node.js (and therefore OpenClaw) honours these natively — all outbound HTTP/S
+// from OpenClaw (channel calls, web browsing, tool calls) flows through HermitClaw's
+// CONNECT proxy. Configure domain allow/deny rules in Tide Pool → Network Rules.
 {
-  "_comment": "OpenClaw HermitClaw provider configuration template.",
-  "_comment2": "Copy to your OpenClaw config directory and replace placeholder values.",
-  "providers": [
-    {
-      "id": "hermitclaw",
-      "name": "HermitClaw",
-      "type": "hermitclaw",
-      "baseUrl": "http://hermit_shell:3000",
-      "token": "${HERMITCLAW_TOKEN}",
-      "description": "Routes model calls through HermitClaw with credential injection and audit logging."
-    }
-  ],
-  "defaultProvider": "hermitclaw",
-  "_setup": [
-    "1. Run scripts/clawbot-add.sh openclaw 3001 to register this agent.",
-    "2. The script will write HERMITCLAW_TOKEN to .clawbots/openclaw.env.",
-    "3. Mount .clawbots/openclaw.env as --env-file when starting the container.",
-    "4. OpenClaw will use HTTP_PROXY=http://hermit_shell:3000 for outbound calls.",
-    "5. Access the UI at http://localhost:3000/agents/openclaw/ (after login)."
-  ]
+  models: {
+    // "merge" adds this provider alongside existing ones rather than replacing them.
+    mode: "merge",
+    providers: {
+      hermitclaw: {
+        // hermit_shell resolves on the hermitclaw_sand_bed Docker network.
+        // For local dev with backend on host: use http://localhost:3000/v1
+        baseUrl: "http://hermit_shell:3000/v1",
+
+        // HERMITCLAW_TOKEN is written to .clawbots/openclaw.env by clawbot-add.sh.
+        // OpenClaw reads it from the environment at startup.
+        apiKey: "${HERMITCLAW_TOKEN}",
+
+        // HermitClaw's model proxy is OpenAI-compatible.
+        api: "openai-completions",
+
+        // List the models available through your HermitClaw providers.
+        // Model IDs must match what your upstream providers return
+        // (e.g. Ollama model tags, OpenAI model names).
+        models: [
+          // ── Local Ollama models (adjust to what you have pulled) ──────────
+          {
+            id: "llama3.1",
+            name: "Llama 3.1 (via HermitClaw)",
+            reasoning: false,
+            input: ["text"],
+            contextWindow: 128000,
+            maxTokens: 32000,
+          },
+          {
+            id: "qwen2.5-coder",
+            name: "Qwen 2.5 Coder (via HermitClaw)",
+            reasoning: false,
+            input: ["text"],
+            contextWindow: 32768,
+            maxTokens: 8192,
+          },
+          // ── Cloud providers (uncomment and configure a RESTRICTED provider) ─
+          // {
+          //   id: "claude-sonnet-4-5",
+          //   name: "Claude Sonnet (via HermitClaw)",
+          //   reasoning: false,
+          //   input: ["text", "image"],
+          //   contextWindow: 200000,
+          //   maxTokens: 8192,
+          // },
+          // {
+          //   id: "gpt-4o",
+          //   name: "GPT-4o (via HermitClaw)",
+          //   reasoning: false,
+          //   input: ["text", "image"],
+          //   contextWindow: 128000,
+          //   maxTokens: 16384,
+          // },
+        ],
+      },
+    },
+  },
 }

@@ -236,6 +236,73 @@ HermitClaw isolates agents from the internet, not from each other or from other 
 
 ---
 
+## Connecting OpenClaw
+
+[OpenClaw](https://openclaw.ai) is the primary integration target for HermitClaw.
+OpenClaw is a personal AI assistant gateway that connects messaging channels (WhatsApp,
+Telegram, Discord, iMessage, Slack) to an AI agent called Pi. Pi can run code, browse the
+web, execute bash commands, and automate tasks — which makes a security layer like HermitClaw
+essential.
+
+> **Note:** Bare-metal macOS support was deprecated by OpenClaw in early 2026. The recommended
+> path is a Linux server or Docker container. See
+> [openclaw-ansible](https://github.com/openclaw/openclaw-ansible) for a hardened server setup.
+
+### How it works
+
+```
+[WhatsApp / Telegram / Discord]
+         │
+         ▼
+  [OpenClaw gateway]  ──── LLM calls ──▶  hermit_shell /v1/chat/completions
+         │  (sand_bed, no internet)        (bearer token auth, fully logged)
+         │
+         └── outbound HTTP/S ──▶  hermit_shell CONNECT proxy
+                                  (domain rules enforced, logged)
+```
+
+OpenClaw has no direct internet access. All LLM calls and outbound traffic flow through
+HermitClaw, which logs everything and enforces your network policy.
+
+### Quick setup
+
+```bash
+# 1. Start HermitClaw
+docker compose up -d
+
+# 2. Register OpenClaw as an agent
+#    Writes .clawbots/openclaw.env with the bearer token + proxy settings
+./scripts/clawbot-add.sh openclaw 18789
+
+# 3. Copy the provider config to your OpenClaw config directory
+cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
+#    Edit the models array to match what you have in HermitClaw → Providers
+
+# 4. Start OpenClaw on the HermitClaw network
+docker run -d \
+  --name openclaw \
+  --network hermitclaw_sand_bed \
+  --env-file .clawbots/openclaw.env \
+  -v ~/.openclaw:/home/node/.openclaw \
+  openclaw:local
+
+# 5. Access OpenClaw UI via Tide Pool
+#    Tide Pool → Agents → openclaw → Open UI
+#    Or: http://localhost:3000/agents/openclaw/
+```
+
+Two tokens are in play — don't confuse them:
+
+| Token | Location | Purpose |
+|---|---|---|
+| `HERMITCLAW_TOKEN` | `.clawbots/openclaw.env` | HermitClaw agent auth. Used as `apiKey` when OpenClaw calls `/v1/chat/completions`. |
+| OpenClaw gateway token | `~/.openclaw/.env` | OpenClaw's own Control UI token. Managed by OpenClaw, unrelated to HermitClaw. |
+
+For the full integration guide including network rules, model access control, and production
+server deployment, see [`examples/openclaw/README.md`](examples/openclaw/README.md).
+
+---
+
 ## Deployment Considerations (TLS/Reverse Proxy)
 
 For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the Hermit Shell.
@@ -531,10 +598,18 @@ HermitClaw routes the call to Ollama, logs it in the Audit Log, and returns the 
 - [x] **Phase 8B** — HTTP CONNECT proxy with priority-ordered domain rules, Network Rules + Settings tabs
 - [x] **Phase 8C** — Session cookie login gate, agent UI reverse proxy (`/agents/:name/*`), clawbot provisioning scripts
 
+### Recent improvements
+
+- [x] **Dev UX** — Auto-login when `VITE_ADMIN_API_KEY` is set; sticky token dialog requires explicit acknowledgment before dismissal
+- [x] **Audit log detail drawer** — Click any row to open a right-side panel with formatted request/response bodies
+- [x] **Audit log retention** — Configurable in Settings (Forever / 7 / 30 / 90 / 365 days); pruned on a 24h interval
+- [x] **Provider enable/disable** — Toggle providers on/off from the Providers tab without deleting them
+
 ### Planned
 
 - [ ] **Phase 8D** — Inbound routing: messaging channels (WhatsApp, Telegram, Slack) → agent webhook dispatch
 - [ ] **Phase 9** — Risk Scanner: inline classification of outbound requests and inbound responses; configurable block policies per agent
+- [ ] **OpenClaw E2E smoke test** — Full end-to-end verification with a real OpenClaw container on `sand_bed`
 
 ---
 
