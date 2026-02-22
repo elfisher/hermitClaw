@@ -2,78 +2,51 @@
 
 **A Hard Shell for Soft Agents.**
 
-HermitClaw is a self-hosted, secure tool execution gateway and credential vault for AI agents. Agents are sandboxed with zero internet access — all tool calls are routed through HermitClaw, which validates the request, injects the right credentials, executes the call, and logs everything.
+HermitClaw is a secure proxy and credential vault for **[OpenClaw](https://openclaw.ai)** personal AI assistants. It sits between OpenClaw and the internet, enforcing network policy, injecting credentials, and logging all LLM calls and outbound traffic.
 
-> **Status:** Phases 0–8C complete. Login-gated Tide Pool UI, model proxy, CONNECT proxy with domain rules, agent UI reverse proxy, and clawbot provisioning scripts.
+> **Primary target:** OpenClaw agents on a self-hosted Mac mini or home server.
+> **Also works with:** Any agent framework that can call HTTP APIs.
+> **Status:** Phases 0–8C complete. E2E OpenClaw integration verified.
 
 ---
 
-## The Problem
+## Why HermitClaw?
 
-AI agents need API keys to do useful work. But giving an agent direct access to credentials is dangerous:
+OpenClaw connects messaging channels (WhatsApp, Telegram, Discord, iMessage) to an AI agent called Pi. Pi can run code, browse the web, execute bash commands, and automate tasks — which makes a security layer like HermitClaw essential.
+
+**The problem:**
 - Agents are vulnerable to prompt injection
-- Credentials leak into logs, context windows, and model outputs
-- There's no audit trail of what the agent actually did
+- Giving OpenClaw your Anthropic/OpenAI API key directly means it could be exfiltrated
+- Cloud model calls and outbound channel/web requests are invisible — no audit trail
+- No way to enforce network policy (e.g., "allow Telegram API, deny everything else")
 
-## The Solution
+**The solution:**
 
-HermitClaw sits between your agents and the internet. Agents never hold credentials — they ask HermitClaw to execute calls on their behalf.
+HermitClaw becomes the **sole broker** for everything OpenClaw does:
 
 ```
-Agent (sandboxed) → POST /v1/execute → HermitClaw → GitHub / Slack / any API
-                                            ↓
-                                     Injects credential
-                                     Logs the request
-                                     Returns the response
+[WhatsApp / Telegram / Discord]
+         │
+         ▼
+  [OpenClaw gateway]  ──── LLM calls ───▶  hermit_shell /v1/chat/completions
+         │  (sand_bed, no internet)         /api/chat (native Ollama format)
+         │                                  (bearer token auth, fully logged)
+         └── outbound HTTP/S ──▶  hermit_shell CONNECT proxy
+                                  (domain rules enforced, host:port logged)
 ```
+
+OpenClaw runs in a sandboxed Docker network with zero internet access. All LLM calls and outbound traffic flow through HermitClaw, which logs everything and enforces your network policy.
 
 ---
 
-## Architecture
-
-The system enforces a **zero-trust network topology** using Docker:
-
-| Component | Name | Description |
-|-----------|------|-------------|
-| **The Hermit Shell** | `hermit_shell` | Gateway service — the only component with internet access |
-| **The Pearl Vault** | `hermit_db` | PostgreSQL database — all secrets encrypted at rest (AES-256-GCM) |
-| **The Tide Pool** | `web/` | React dashboard — manage secrets, view audit logs, kill switch |
-| **The Crab** | your agent | Sandboxed agent container — no internet, talks to Hermit Shell only |
-
-```
-┌─────────────────────────────────────────────┐
-│  sand_bed (internal — no internet)          │
-│  ┌──────────────┐  ┌──────────────┐         │
-│  │  Clawbot Dev │  │ Clawbot Prod │         │
-│  └──────┬───────┘  └──────┬───────┘         │
-│         │                 │                  │
-└─────────┼─────────────────┼──────────────────┘
-          │  POST /v1/execute│
-┌─────────┼─────────────────┼──────────────────┐
-│  open_ocean (bridge — internet access)       │
-│         ▼                 ▼                  │
-│  ┌──────────────────────────────┐            │
-│  │      Hermit Shell            │            │
-│  └──────────────┬───────────────┘            │
-│                 │                            │
-│  ┌──────────────▼───────────────┐            │
-│  │       Pearl Vault (DB)       │            │
-│  └──────────────────────────────┘            │
-└─────────────────────────────────────────────┘
-          │
-          ▼ HTTPS
-    GitHub, Slack, etc.
-```
-
----
-
-## Quickstart
+## Quickstart (OpenClaw Integration)
 
 ### Prerequisites
 - Docker + Docker Compose
 - Node.js 22+
+- OpenClaw installed (see [openclaw.ai](https://openclaw.ai))
 
-### 1. Clone and install
+### 1. Clone and install HermitClaw
 
 ```bash
 git clone https://github.com/elfisher/hermitClaw.git
@@ -85,230 +58,328 @@ npm install
 
 ```bash
 cp .env.example .env
-```
 
-Generate a master encryption key and add it to `.env`:
-
-```bash
+# Generate a 32-byte master encryption key (encrypts stored secrets)
 echo "MASTER_PEARL=$(openssl rand -hex 32)" >> .env
+
+# Generate a secure admin API key (used to log in to Tide Pool)
+echo "ADMIN_API_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
-### 3. Start the stack
+### 3. Start HermitClaw
 
 ```bash
 docker compose up -d
 ```
 
-The Shell will be available at `http://localhost:3000`.
+HermitClaw will be available at `http://localhost:3000`.
 
-### 4. Verify
-
+Verify:
 ```bash
 curl http://localhost:3000/health
 # {"status":"ok","service":"hermitclaw","version":"0.1.0"}
 ```
 
----
-
-## API Overview
-
-### Agents (Crabs)
+### 4. Register OpenClaw as an agent
 
 ```bash
-# Register an agent — token is shown once
-POST /v1/crabs
-{ "name": "my-bot" }
-
-# List agents (tokens never returned)
-GET /v1/crabs
-
-# Kill switch — immediately revoke an agent's access
-PATCH /v1/crabs/:id/revoke
+# Writes .clawbots/openclaw.env with bearer token + HTTP_PROXY settings
+./scripts/clawbot-add.sh openclaw 18789
 ```
 
-### Secrets (Pearls)
-
+This creates `.clawbots/openclaw.env`:
 ```bash
-# Store an encrypted credential for an agent
-POST /v1/secrets
-{ "crabId": "...", "service": "github", "plaintext": "ghp_..." }
-
-# List secrets (encrypted values never returned)
-GET /v1/secrets?crabId=...
-
-# Remove a secret
-DELETE /v1/secrets/:id
+HERMITCLAW_TOKEN=<long-bearer-token>
+SHELL_URL=http://hermit_shell:3000
+AGENT_NAME=openclaw
+HTTP_PROXY=http://hermit_shell:3000
+HTTPS_PROXY=http://hermit_shell:3000
+NO_PROXY=localhost,127.0.0.1,hermit_shell
 ```
 
-### Tool Execution
+### 5. Configure OpenClaw to use HermitClaw
+
+Copy the example configuration to your OpenClaw config directory:
 
 ```bash
-# Execute a tool call — Shell injects credentials and proxies the request
-POST /v1/execute
-Authorization: Bearer <agent-token>
+cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
+```
+
+Edit `~/.openclaw/openclaw.json` and update the `models` array to match what you have configured in HermitClaw (see step 7).
+
+Key config sections:
+```json
 {
-  "service": "github",
-  "url": "https://api.github.com/repos/elfisher/hermitClaw",
-  "method": "GET"
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "hermitclaw": {
+        "baseUrl": "http://hermit_shell:3000",
+        "apiKey": "${HERMITCLAW_TOKEN}",
+        "api": "ollama",  // or "openai-completions" for OpenAI format
+        "models": [
+          {
+            "id": "llama3.1",
+            "name": "Llama 3.1 (via HermitClaw)",
+            "contextWindow": 128000,
+            "maxTokens": 32000
+          }
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "bind": "lan",  // Required for HermitClaw proxy access
+    "auth": {
+      "mode": "password",
+      "password": "your-strong-password-here"
+    },
+    "controlUi": {
+      // Bypasses device pairing (required for Docker-on-Mac NAT)
+      // Password auth + Tide Pool session + network isolation still enforced
+      "allowInsecureAuth": true
+    }
+  }
 }
 ```
 
-### Audit Log
+### 6. Start OpenClaw on the HermitClaw network
 
 ```bash
-# Paginated log of all tool calls
-GET /v1/tides?page=1&limit=50&crabId=...
-```
-
----
-
-## Security Model
-
-### What HermitClaw protects against
-
-**Credential exposure**
-Agents never hold API keys. Credentials are stored encrypted (AES-256-GCM, per-record IV) and injected only at the network boundary. They are never returned by the API, never appear in agent context windows or logs, and are not visible via `docker inspect`.
-
-**Admin API Authentication**
-Management routes (`/v1/crabs`, `/v1/secrets`, `/v1/tides`) are protected by an `x-admin-api-key` header, preventing unauthorized access to administrative functions and the Tide Pool UI.
-
-**Lateral movement from a compromised agent**
-Agent containers are on an internal Docker network (`sand_bed`) with no internet access. A compromised agent cannot make outbound calls except through HermitClaw. It cannot reach other services, exfiltrate data directly, or contact external command-and-control infrastructure.
-
-**Tool Allowlisting**
-Agents can be configured with an `allowedTools` list, restricting them to call only approved URLs and HTTP methods. This mitigates prompt injection leading to unintended actions by limiting agent capabilities.
-
-**Runaway or rogue agents**
-The kill switch (`PATCH /v1/crabs/:id/revoke`) immediately invalidates an agent's token. Combined with the audit log, you can see exactly what an agent did and cut it off before further damage.
-
-**Rate Limiting**
-The `/v1/execute` endpoint is rate-limited per-agent (60 requests/minute), preventing a single runaway agent from exhausting downstream API limits or performing a Denial-of-Service attack on the Hermit Shell.
-
-**Request Timeout**
-Outbound HTTP requests made by agents through HermitClaw now have a 30-second timeout, preventing slow or unresponsive upstream services from hanging the gateway indefinitely.
-
-**Token Rotation / Expiration**
-Agent tokens can be configured with an optional `expiresAt` timestamp, allowing for automatic token invalidation and enforcing regular token rotation policies.
-
-**Credential leakage into the model**
-Because agents route calls through HermitClaw rather than holding keys directly, credentials are never in the agent's prompt, response, memory, or tool arguments. A model that has been jailbroken cannot exfiltrate a key it never received.
-
-**Audit coverage**
-Every outbound tool call is logged: agent identity, target URL, HTTP method, status code, and a sanitized response. You have a complete record of what every agent did.
-
----
-
-### What HermitClaw does NOT protect against
-
-**Overly permissive credentials**
-HermitClaw enforces *who* can use a credential and *that it goes through the gateway* — it does not enforce *what that credential is allowed to do*. If you store a Gmail credential that has delete access and give it to an agent, that agent can delete your email. If you store an AWS credential with `AdministratorAccess`, the agent can destroy your infrastructure. **Limit credential scope at the source.** Use read-only tokens wherever possible; use scoped tokens (e.g. a GitHub token with only `contents: read`) rather than personal access tokens with broad permissions.
-
-**Prompt injection leading to unintended actions**
-A malicious prompt in a document, email, or web page can instruct a capable agent to take actions the user didn't intend — deleting files, sending messages, making purchases — entirely within the permissions the credential allows. While `allowedTools` helps restrict *where* an agent can act, it cannot prevent an agent from choosing to use a permission it legitimately has within that scope.
-
-**Actions within authorized scope**
-If an agent is authorized to send Slack messages, it can be manipulated into sending embarrassing or harmful ones. If it can write files, it can overwrite important ones. Authorization boundary enforcement is a necessary layer on top of HermitClaw, not a substitute for it.
-
-**Host-level compromise**
-`MASTER_PEARL` (the vault encryption key) lives in `.env` on the host. If the host is compromised, an attacker can read the key and decrypt all stored credentials. This is an inherent limitation of self-hosted encryption — there is no hardware security module (HSM) or key management service (KMS) in the current design. For a home server with physical security, this is an acceptable tradeoff. For a shared or cloud environment, use a secrets manager (e.g. Vault) and do not commit `.env`.
-For best practices on securing your Mac mini host, see [docs/mac-mini-deployment.md](docs/mac-mini-deployment.md).
-
-**Network-internal threats**
-HermitClaw isolates agents from the internet, not from each other or from other services on the same Docker network. Agents on `sand_bed` can reach HermitClaw and each other. If two agents share a workspace directory (Mode 3), they can read and modify each other's files.
-
-**Summary**
-
-| Threat | Protected? |
-|--------|-----------|
-| Credential in agent context window | Yes |
-| Agent making direct internet calls | Yes |
-| Audit trail of tool calls | Yes |
-| Instant agent revocation | Yes |
-| Admin API unauthorized access | Yes |
-| Unapproved tool usage | Yes |
-| Requests to private/loopback IPs (SSRF) | Yes |
-| Runaway agent API flooding | Yes |
-| Agent token expiry | Yes |
-| Credential scope too broad | **No — limit at the source** |
-| Prompt injection → unintended destructive action | **Partial — allowedTools in place, Phase 7 Risk Scanner planned** |
-| Host OS / `.env` compromise | **No** |
-| Agent-to-agent lateral movement (same network) | **No** |
-
----
-
-## Connecting OpenClaw
-
-[OpenClaw](https://openclaw.ai) is the primary integration target for HermitClaw.
-OpenClaw is a personal AI assistant gateway that connects messaging channels (WhatsApp,
-Telegram, Discord, iMessage, Slack) to an AI agent called Pi. Pi can run code, browse the
-web, execute bash commands, and automate tasks — which makes a security layer like HermitClaw
-essential.
-
-> **Note:** Bare-metal macOS support was deprecated by OpenClaw in early 2026. For server-side
-> deployment, follow the [OpenClaw installation docs](https://docs.openclaw.ai/install/docker).
-
-### How it works
-
-```
-[WhatsApp / Telegram / Discord]
-         │
-         ▼
-  [OpenClaw gateway]  ──── LLM calls ──▶  hermit_shell /v1/chat/completions
-         │  (sand_bed, no internet)        (bearer token auth, fully logged)
-         │
-         └── outbound HTTP/S ──▶  hermit_shell CONNECT proxy
-                                  (domain rules enforced, logged)
-```
-
-OpenClaw has no direct internet access. All LLM calls and outbound traffic flow through
-HermitClaw, which logs everything and enforces your network policy.
-
-### Quick setup
-
-```bash
-# 1. Start HermitClaw
-docker compose up -d
-
-# 2. Register OpenClaw as an agent
-#    Writes .clawbots/openclaw.env with the bearer token + proxy settings
-./scripts/clawbot-add.sh openclaw 18789
-
-# 3. Copy the provider config to your OpenClaw config directory
-cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
-#    Edit the models array to match what you have in HermitClaw → Providers
-
-# 4. Start OpenClaw on the HermitClaw network
 docker run -d \
   --name openclaw \
   --network hermitclaw_sand_bed \
   --env-file .clawbots/openclaw.env \
   -v ~/.openclaw:/home/node/.openclaw \
   openclaw:local
-
-# 5. Access OpenClaw UI via Tide Pool
-#    Tide Pool → Agents → openclaw → Open UI
-#    Or: http://localhost:3000/agents/openclaw/
 ```
 
-Two tokens are in play — don't confuse them:
+> **Note:** Replace `openclaw:local` with your OpenClaw image tag. See [OpenClaw installation docs](https://docs.openclaw.ai/install/docker).
 
-| Token | Location | Purpose |
-|---|---|---|
-| `HERMITCLAW_TOKEN` | `.clawbots/openclaw.env` | HermitClaw agent auth. Used as `apiKey` when OpenClaw calls `/v1/chat/completions`. |
-| OpenClaw gateway token | `~/.openclaw/.env` | OpenClaw's own Control UI token. Managed by OpenClaw, unrelated to HermitClaw. |
+### 7. Configure an LLM provider in Tide Pool
 
-For the full integration guide including network rules, model access control, and production
-server deployment, see [`examples/openclaw/README.md`](examples/openclaw/README.md).
+Open `http://localhost:3000` and log in with your `ADMIN_API_KEY`.
+
+Go to **Providers → Add Provider**:
+
+**For local Ollama (recommended for testing):**
+
+| Field | Value |
+|-------|-------|
+| Name | `ollama-local` |
+| Base URL | `http://host.docker.internal:11434` |
+| Protocol | `OPENAI` |
+| Scope | `GLOBAL` (all agents can use it) |
+| API Key Secret | *(leave blank)* |
+
+**For Anthropic Claude:**
+
+| Field | Value |
+|-------|-------|
+| Name | `anthropic-claude` |
+| Base URL | `https://api.anthropic.com` |
+| Protocol | `ANTHROPIC` |
+| Scope | `RESTRICTED` (explicit per-agent access grant) |
+| API Key Secret | `anthropic` (we'll create this pearl next) |
+
+Then go to **Secrets → Add Secret**:
+- Agent: `openclaw`
+- Service: `anthropic`
+- Plaintext: `sk-ant-...` (your Anthropic API key)
+
+Then back to **Providers**, click on `anthropic-claude` → **Grant Access** → select `openclaw`.
+
+### 8. Access OpenClaw UI via Tide Pool
+
+In Tide Pool, go to **Agents → openclaw → Open UI**.
+
+Or navigate directly to: `http://localhost:3000/agents/openclaw/`
+
+Log in with the password you set in `openclaw.json`.
+
+### 9. Send a message and verify audit trail
+
+Send a message in OpenClaw that requires an LLM call (e.g., "Hello, how are you?").
+
+Go back to Tide Pool → **Audit Log** to see:
+- **EGRESS** entry to the LLM provider (request + response bodies logged)
+- **EGRESS** entries for any outbound channel/web requests (host:port logged for HTTPS tunnels)
+
+**You're done!** OpenClaw now routes all traffic through HermitClaw with full audit logging and network policy enforcement.
 
 ---
 
-## Deployment Considerations (TLS/Reverse Proxy)
+## Understanding the Two Tokens
 
-For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the Hermit Shell.
+OpenClaw operates with two separate tokens — don't confuse them:
 
-The Hermit Shell operates over plain HTTP. While this is acceptable for communication internal to a physically secure host, exposing plain HTTP over a network (even a local home network) can allow attackers to snoop on or tamper with traffic, including sensitive API keys and other data.
+| Token | Location | Purpose |
+|---|---|---|
+| **`HERMITCLAW_TOKEN`** | `.clawbots/openclaw.env` | HermitClaw agent authentication. Used as `apiKey` in `openclaw.json` when OpenClaw calls `/v1/chat/completions` or `/api/chat`. |
+| **OpenClaw gateway token** | `~/.openclaw/.env` | Authenticates users to OpenClaw's own Control UI. Managed entirely by OpenClaw. Unrelated to HermitClaw. |
 
-A reverse proxy configured with a valid SSL/TLS certificate will encrypt all traffic between clients (e.g., your browser accessing the Tide Pool UI, or agents on other hosts communicating with the Hermit Shell) and the HermitClaw server, providing confidentiality and integrity.
+---
+
+## Architecture
+
+HermitClaw enforces a **zero-trust network topology** using Docker:
+
+```
+┌─────────────────────────────────────────────┐
+│  sand_bed (internal — no internet)          │
+│  ┌──────────────────────────┐               │
+│  │  OpenClaw (or any agent) │               │
+│  └──────────┬───────────────┘               │
+│             │                                │
+└─────────────┼────────────────────────────────┘
+              │  LLM calls + CONNECT proxy
+┌─────────────┼────────────────────────────────┐
+│  open_ocean (bridge — internet access)      │
+│             ▼                                │
+│  ┌──────────────────────────────┐           │
+│  │      Hermit Shell:3000       │           │
+│  │  • Model proxy               │           │
+│  │  • CONNECT proxy             │           │
+│  │  • Agent UI reverse proxy    │           │
+│  │  • Tide Pool UI              │           │
+│  └──────────────┬───────────────┘           │
+│                 │                            │
+│  ┌──────────────▼───────────────┐           │
+│  │     Pearl Vault (Postgres)   │           │
+│  └──────────────────────────────┘           │
+└─────────────────────────────────────────────┘
+          │
+          ▼ HTTPS
+    Anthropic, OpenAI, Telegram, etc.
+```
+
+### Components
+
+| Component | Name | Description |
+|-----------|------|-------------|
+| **The Hermit Shell** | `hermit_shell` | Gateway service — the only component with internet access |
+| **The Pearl Vault** | `hermit_db` | PostgreSQL database — all secrets encrypted at rest (AES-256-GCM) |
+| **The Tide Pool** | `web/` | React dashboard — manage providers, secrets, network rules, view audit logs |
+| **The Crab** | your agent | Sandboxed agent container (e.g., OpenClaw) — no internet, all traffic via Hermit Shell |
+
+### Traffic Types
+
+**A. Model API Calls** (application-layer proxy)
+- OpenClaw calls `POST /v1/chat/completions` (OpenAI format) or `POST /api/chat` (Ollama format)
+- HermitClaw authenticates the bearer token, resolves the provider, optionally injects API key from vault
+- **Full request + response visibility** (logged to audit trail)
+- Completely transparent to the agent
+
+**B. Outbound Channel/Web Calls** (CONNECT proxy)
+- All HTTP/HTTPS from OpenClaw routes through `HTTP_PROXY=http://hermit_shell:3000`
+- Node.js honors this natively — zero code changes required
+- HermitClaw evaluates domain rules (priority-ordered, wildcard matching) before allowing/denying tunnels
+- **Host:port visibility only** for HTTPS (content is end-to-end encrypted)
+
+**C. Agent Web UI** (reverse proxy + WebSocket)
+- HermitClaw proxies OpenClaw's Control UI at `/agents/openclaw/*`
+- Includes WebSocket upgrade passthrough for real-time chat
+- OpenClaw stays on `sand_bed` with no published ports — full isolation preserved
+
+---
+
+## Network Policy (CONNECT Proxy Rules)
+
+Configure domain allow/deny rules in **Tide Pool → Network Rules**.
+
+Rules are priority-ordered and support wildcards:
+
+```
+Priority 1:  *.telegram.org    ALLOW   (global)
+Priority 2:  *.anthropic.com   ALLOW   (for agent: openclaw)
+Priority 3:  *                 DENY    (global catch-all)
+```
+
+Default behavior when no rule matches is controlled by **Settings → CONNECT Proxy Default** (`ALLOW` for dev, `DENY` for production).
+
+---
+
+## Using Ollama on Mac with HermitClaw
+
+Ollama runs natively on Mac (Apple Silicon or Intel). HermitClaw's model proxy routes agent model calls to it — the agent never talks to Ollama directly.
+
+### Step 1 — Install Ollama
+
+```bash
+brew install ollama
+```
+
+Or download from [ollama.com](https://ollama.com).
+
+### Step 2 — Bind Ollama to all interfaces
+
+By default Ollama only listens on `127.0.0.1`. Set `OLLAMA_HOST` so Docker containers can reach it:
+
+```bash
+export OLLAMA_HOST=0.0.0.0
+```
+
+Then restart Ollama (quit the menu-bar app and relaunch, or restart the service).
+
+> **Security note:** `0.0.0.0` exposes port 11434 to other devices on your local network. However, your agent containers cannot reach it directly — they're on `sand_bed` (internal network, no default gateway). The only path to Ollama is through HermitClaw's model proxy, which is logged. The real exposure is other devices on your LAN. On a trusted home network this is acceptable.
+
+### Step 3 — Pull a model
+
+```bash
+ollama pull llama3.1      # 8B, fast on Apple Silicon
+ollama pull qwen2.5-coder # good for coding agents
+```
+
+Verify:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+### Step 4 — Set `OLLAMA_BASE_URL` in `.env`
+
+Confirm this is in your `.env`:
+
+```
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+> `host.docker.internal` is a special Docker hostname that resolves to your Mac's IP from inside containers.
+
+### Step 5 — Add Ollama as a provider in Tide Pool
+
+See step 7 in the OpenClaw quickstart above.
+
+### Step 6 — Pre-load the model (recommended)
+
+Ollama unloads models from memory after inactivity. Pre-load with `keep_alive`:
+
+```bash
+curl -s http://localhost:11434/api/chat -d '{
+  "model": "llama3.1",
+  "messages": [{"role": "user", "content": "hi"}],
+  "stream": false,
+  "keep_alive": "24h"
+}'
+```
+
+This keeps the model in memory for 24 hours, avoiding 80+ second cold starts.
+
+---
+
+## Performance Note (OpenClaw + Local LLMs)
+
+OpenClaw injects ~17KB of system prompt + bootstrap files (tooling docs, workspace context) on **every message turn**. This significantly increases LLM processing time:
+
+- **Simple message ("hi"):** 6-9 seconds with llama3.1:8b
+- **OpenClaw message (full prompt):** 90-120+ seconds, often timeout
+
+**Workarounds:**
+1. **Use cloud provider** (Anthropic Claude, OpenAI GPT-4) — much faster
+2. **Use faster local model** (qwen2.5-coder may be quicker)
+3. **Accept slow performance** for local-only testing
+4. **Increase timeout** — HermitClaw model proxy timeout is 300s by default
+
+This is a limitation of OpenClaw's prompt size, not HermitClaw. Future OpenClaw versions may expose configuration to reduce prompt injection.
 
 ---
 
@@ -322,8 +393,6 @@ This guide runs the backend with hot-reload and the frontend with Vite's dev ser
 - **Docker Desktop** (for the database)
 - **npm** (bundled with Node)
 
----
-
 ### Step 1 — Clone and install dependencies
 
 ```bash
@@ -333,21 +402,15 @@ npm install          # installs backend deps + runs prisma generate
 cd web && npm install && cd ..
 ```
 
----
-
 ### Step 2 — Create your `.env` file
 
 ```bash
 cp .env.example .env
-```
 
-Open `.env` and fill in the two required values:
-
-```bash
-# Generate a 32-byte master encryption key (encrypts all stored secrets)
+# Generate a 32-byte master encryption key
 echo "MASTER_PEARL=$(openssl rand -hex 32)" >> .env
 
-# Generate a secure admin API key (used to log in to Tide Pool)
+# Generate a secure admin API key
 echo "ADMIN_API_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
@@ -363,8 +426,6 @@ NODE_ENV=development
 ```
 
 > **Note:** `DB_PASSWORD` can stay as `securepass` for local dev — the database port is not exposed to the network.
-
----
 
 ### Step 3 — Start the dev environment
 
@@ -385,15 +446,11 @@ Output will be labeled `[backend]` (cyan) and `[frontend]` (magenta). Ctrl-C sto
 | `http://localhost:3000` | Hermit Shell API |
 | `http://localhost:5173` | Tide Pool UI (Vite, proxies `/v1/*` to backend) |
 
----
-
 ### Step 4 — Sign in to Tide Pool
 
 1. Open `http://localhost:5173` in your browser.
 2. Enter your `ADMIN_API_KEY` from `.env`.
 3. You're in.
-
----
 
 ### Step 5 — Register your first agent
 
@@ -409,25 +466,6 @@ curl -s -X POST http://localhost:3000/v1/crabs \
 ```
 
 Copy the `token` — it's only shown once.
-
----
-
-### Step 6 — Make a test tool call
-
-```bash
-curl -s -X POST http://localhost:3000/v1/execute \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <agent-token>" \
-  -d '{
-    "service": "none",
-    "url": "https://httpbin.org/get",
-    "method": "GET"
-  }' | python3 -m json.tool
-```
-
-Check the **Audit Log** tab in Tide Pool to see the request logged.
-
----
 
 ### Useful dev commands
 
@@ -453,134 +491,193 @@ docker compose down
 
 ---
 
-### Full Docker stack (alternative)
+## Security Model
 
-If you want everything in Docker (no local Node required):
+### What HermitClaw protects against
 
-```bash
-docker compose up --build -d
-```
+✅ **Credential exposure** — Agents never hold API keys; stored encrypted (AES-256-GCM); injected only at network boundary
 
-Then build and serve the frontend from the same container:
+✅ **Lateral movement from compromised agent** — Agents on internal network (`sand_bed`) with no internet access
 
-```bash
-cd web && npm run build && cd ..
-docker compose up --build -d
-```
+✅ **Tool allowlisting** — Restrict agents to approved URLs/methods (mitigates prompt injection)
 
-The full stack (including the pre-built UI) will be at `http://localhost:3000`.
+✅ **Runaway agents** — Kill switch revokes token instantly; rate limiting (60 req/min per agent); 30s request timeout
 
----
+✅ **Audit coverage** — Every outbound call logged (agent, target, method, status, request/response bodies for LLM calls)
 
-## Using Ollama on Mac with HermitClaw
+✅ **Admin API protection** — Management routes require `x-admin-api-key` header
 
-Ollama runs natively on Mac (Apple Silicon or Intel). HermitClaw's model proxy routes agent model calls to it — the agent never talks to Ollama directly.
+✅ **SSRF guard** — Blocks private IP ranges (RFC-1918, link-local, CGNAT, IMDS)
 
-### The networking problem
+✅ **Token expiration** — Optional `expiresAt` timestamp for automatic token invalidation
 
-When the backend runs locally (`npm run dev`), `localhost:11434` works fine. But when running inside Docker, the container's `localhost` is the container itself — not your Mac. Docker Desktop solves this with the special hostname `host.docker.internal`, which always resolves to your Mac's IP from inside any container.
+### What HermitClaw does NOT protect against
 
-Ollama by default binds to `127.0.0.1:11434` (loopback only). Docker cannot reach a loopback address on the host, so you need to tell Ollama to also listen on the Docker bridge interface.
+❌ **Overly permissive credentials** — Limit credential scope at the source (use read-only tokens, scoped GitHub PATs, etc.)
 
----
+❌ **Prompt injection → unintended actions** — A malicious prompt can instruct an agent to act within authorized scope
 
-### Step 1 — Install Ollama
+❌ **Host-level compromise** — `MASTER_PEARL` lives in `.env`; host compromise = vault compromise
 
-```bash
-brew install ollama
-```
+❌ **Network-internal threats** — Agents on `sand_bed` can reach each other (Mode 3 workspace sharing is intentional)
 
-Or download from [ollama.com](https://ollama.com).
+### Summary
 
----
-
-### Step 2 — Bind Ollama to all interfaces
-
-By default Ollama only listens on `127.0.0.1`. Set `OLLAMA_HOST` so Docker containers can reach it:
-
-**Option A — for the current terminal session only:**
-```bash
-OLLAMA_HOST=0.0.0.0 ollama serve
-```
-
-**Option B — persistent (add to `~/.zshrc` or `~/.bashrc`):**
-```bash
-export OLLAMA_HOST=0.0.0.0
-```
-Then restart Ollama (quit the menu-bar app and relaunch, or restart the service).
-
-> **Security note:** `0.0.0.0` exposes port 11434 to other devices on your local network. However, your agent containers are already protected by the architecture:
->
-> - **Agent containers** live on `sand_bed` (`internal: true`) — Docker gives this network no default gateway, so agents have zero routing to `host.docker.internal` and cannot reach Ollama directly.
-> - **`POST /v1/execute`** targeting Ollama's IP is blocked by HermitClaw's SSRF guard (private IP ranges).
-> - **CONNECT proxy** tunnels to `host.docker.internal` can be blocked with a DENY rule in Network Rules.
-> - **`POST /v1/chat/completions`** (the model proxy) is the one intentional path — agents can call Ollama through HermitClaw, which is logged in the Audit Log.
->
-> The real exposure from `0.0.0.0` is **other devices on your LAN**, not your own agents. On a trusted home network this is generally acceptable. On a shared or public network, restrict port 11434 with a macOS `pf` firewall rule, or keep `OLLAMA_HOST=127.0.0.1` and run HermitClaw locally (not in Docker) where `localhost:11434` is sufficient.
+| Threat | Protected? |
+|--------|-----------|
+| Credential in agent context window | Yes |
+| Agent making direct internet calls | Yes |
+| Audit trail of LLM + tool calls | Yes |
+| Instant agent revocation | Yes |
+| Admin API unauthorized access | Yes |
+| Unapproved tool usage | Yes |
+| SSRF (requests to private IPs) | Yes |
+| Runaway agent API flooding | Yes |
+| Agent token expiry | Yes |
+| Credential scope too broad | **No — limit at the source** |
+| Prompt injection → destructive action within scope | **Partial — allowedTools helps** |
+| Host OS / `.env` compromise | **No** |
+| Agent-to-agent lateral movement (same network) | **No** |
 
 ---
 
-### Step 3 — Pull a model
+## Using HermitClaw with Other Agents
 
+HermitClaw is **architected to be agent-agnostic** — while it's optimized for OpenClaw, any agent that can make HTTP requests can use it.
+
+### Generic agent integration
+
+**1. Register the agent:**
 ```bash
-ollama pull llama3.2        # ~2GB, fast on Apple Silicon
-# or
-ollama pull mistral
-ollama pull qwen2.5-coder   # good for coding agents
-```
-
-Verify it's running:
-
-```bash
-curl http://localhost:11434/api/tags
-```
-
----
-
-### Step 4 — Set `OLLAMA_BASE_URL` in `.env`
-
-This is already in `.env.example`. Confirm it's in your `.env`:
-
-```
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-```
-
-> If running the backend locally (not in Docker), you can use `http://localhost:11434` instead — but `host.docker.internal` also works on Mac even outside Docker.
-
----
-
-### Step 5 — Add Ollama as a provider in Tide Pool
-
-1. Open Tide Pool → **Providers → Add Provider**
-2. Fill in:
-
-| Field | Value |
-|-------|-------|
-| Name | `ollama-local` (or any name) |
-| Base URL | `http://host.docker.internal:11434` |
-| Protocol | `OPENAI` (Ollama is OpenAI-compatible) |
-| Scope | `GLOBAL` (all agents can use it) |
-| API Key Secret | *(leave blank — Ollama needs no auth)* |
-
-3. Click **Add Provider**.
-
----
-
-### Step 6 — Test from an agent
-
-Any agent with a bearer token can now call:
-
-```bash
-curl -s -X POST http://localhost:3000/v1/chat/completions \
+curl -X POST http://localhost:3000/v1/crabs \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <agent-token>" \
-  -d '{
-    "model": "llama3.2",
-    "messages": [{"role": "user", "content": "Say hello in one sentence."}]
-  }' | python3 -m json.tool
+  -H "x-admin-api-key: $ADMIN_KEY" \
+  -d '{"name": "my-custom-agent"}'
 ```
 
-HermitClaw routes the call to Ollama, logs it in the Audit Log, and returns the response. The agent never touches Ollama directly.
+Save the `token`.
+
+**2. Call the model proxy:**
+```bash
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -d '{
+    "model": "llama3.1",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": false
+  }'
+```
+
+Or use native Ollama format:
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -d '{
+    "model": "llama3.1",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": false
+  }'
+```
+
+**3. Call the tool execution proxy:**
+```bash
+curl -X POST http://localhost:3000/v1/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -d '{
+    "service": "github",
+    "url": "https://api.github.com/repos/elfisher/hermitClaw",
+    "method": "GET"
+  }'
+```
+
+HermitClaw will inject the `github` credential from the vault (if stored) and return the response.
+
+**4. Use CONNECT proxy for outbound calls:**
+
+Set `HTTP_PROXY` and `HTTPS_PROXY` environment variables to `http://hermit_shell:3000`. Most HTTP clients (Node.js, Python `requests`, curl) honor these natively.
+
+For full API documentation, see the [API Reference](#api-overview) section.
+
+---
+
+## API Overview
+
+### Agents (Crabs)
+
+```bash
+# Register an agent — token is shown once
+POST /v1/crabs
+{ "name": "my-bot", "uiPort": 18789 }  # uiPort optional
+
+# List agents (tokens never returned)
+GET /v1/crabs
+
+# Kill switch — immediately revoke an agent's access
+PATCH /v1/crabs/:id/revoke
+```
+
+### Secrets (Pearls)
+
+```bash
+# Store an encrypted credential for an agent
+POST /v1/secrets
+{ "crabId": "...", "service": "github", "plaintext": "ghp_..." }
+
+# List secrets (encrypted values never returned)
+GET /v1/secrets?crabId=...
+
+# Remove a secret
+DELETE /v1/secrets/:id
+```
+
+### Model Proxy
+
+```bash
+# OpenAI-compatible endpoint
+POST /v1/chat/completions
+Authorization: Bearer <agent-token>
+{ "model": "llama3.1", "messages": [...], "stream": false }
+
+# Ollama native endpoint
+POST /api/chat
+Authorization: Bearer <agent-token>
+{ "model": "llama3.1", "messages": [...], "stream": false }
+```
+
+### Tool Execution
+
+```bash
+# Execute a tool call — Shell injects credentials and proxies the request
+POST /v1/execute
+Authorization: Bearer <agent-token>
+{
+  "service": "github",
+  "url": "https://api.github.com/repos/elfisher/hermitClaw",
+  "method": "GET",
+  "body": {...},     # optional
+  "headers": {...}   # optional
+}
+```
+
+### Audit Log
+
+```bash
+# Paginated log of all traffic (LLM calls, tool calls, CONNECT tunnels)
+GET /v1/tides?page=1&limit=50&crabId=...&direction=EGRESS
+```
+
+---
+
+## Deployment Considerations (TLS/Reverse Proxy)
+
+For deployments beyond a single, isolated local machine, it is **highly recommended** to use a reverse proxy (such as Nginx or Caddy) to handle TLS (Transport Layer Security) for all incoming connections to the Hermit Shell.
+
+The Hermit Shell operates over plain HTTP. While this is acceptable for communication internal to a physically secure host, exposing plain HTTP over a network (even a local home network) can allow attackers to snoop on or tamper with traffic, including sensitive API keys and other data.
+
+A reverse proxy configured with a valid SSL/TLS certificate will encrypt all traffic between clients (e.g., your browser accessing the Tide Pool UI, or agents on other hosts communicating with the Hermit Shell) and the HermitClaw server, providing confidentiality and integrity.
 
 ---
 
@@ -592,23 +689,38 @@ HermitClaw routes the call to Ollama, logs it in the Audit Log, and returns the 
 - [x] **Phase 1** — Crypto core (AES-256-GCM), Prisma schema, secrets + agent API
 - [x] **Phase 2** — Execute gateway: credential injection, HTTP proxy, SSRF guard, audit log
 - [x] **Phase 3** — Tide Pool UI: React dashboard, agent management, secret CRUD, paginated audit log
-- [x] **Security hardening** — Admin API key auth, SSRF guard (RFC-1918 + link-local + CGN), rate limiting, request timeout, token rotation, tool allowlisting
-- [x] **Phase 8A** — Model proxy (`POST /v1/chat/completions`), provider CRUD, Providers tab in Tide Pool
-- [x] **Phase 8B** — HTTP CONNECT proxy with priority-ordered domain rules, Network Rules + Settings tabs
+- [x] **Security hardening** — Admin API key auth, SSRF guard, rate limiting, request timeout, token rotation, tool allowlisting
+- [x] **Phase 8A** — Model proxy (OpenAI + Ollama formats), provider CRUD, Providers tab in Tide Pool
+- [x] **Phase 8B** — HTTP CONNECT proxy with domain rules, Network Rules + Settings tabs
 - [x] **Phase 8C** — Session cookie login gate, agent UI reverse proxy (`/agents/:name/*`), clawbot provisioning scripts
+- [x] **OpenClaw E2E integration** — Full integration verified with native Ollama API support
 
 ### Recent improvements
 
-- [x] **Dev UX** — Auto-login when `VITE_ADMIN_API_KEY` is set; sticky token dialog requires explicit acknowledgment before dismissal
-- [x] **Audit log detail drawer** — Click any row to open a right-side panel with formatted request/response bodies
-- [x] **Audit log retention** — Configurable in Settings (Forever / 7 / 30 / 90 / 365 days); pruned on a 24h interval
-- [x] **Provider enable/disable** — Toggle providers on/off from the Providers tab without deleting them
+- [x] **Ollama native API** — `/api/chat` endpoint for native Ollama format (alongside `/v1/chat/completions`)
+- [x] **Audit log request body logging** — Full request/response bodies now logged for LLM calls
+- [x] **Provider-agnostic architecture** — Support multiple LLM API formats (not forced into OpenAI format)
+- [x] **OpenClaw device auth documentation** — Comprehensive guide for Docker-on-Mac NAT workarounds
+- [x] **Dev UX** — Auto-login when `VITE_ADMIN_API_KEY` is set; sticky token dialog
+- [x] **Audit log detail drawer** — Click any row for formatted request/response view
+- [x] **Audit log retention** — Configurable (Forever / 7 / 30 / 90 / 365 days); 24h interval pruning
+- [x] **Provider enable/disable** — Toggle providers without deleting
 
 ### Planned
 
+- [ ] **Anthropic API support** — Add `/v1/messages` endpoint for native Anthropic format
 - [ ] **Phase 8D** — Inbound routing: messaging channels (WhatsApp, Telegram, Slack) → agent webhook dispatch
 - [ ] **Phase 9** — Risk Scanner: inline classification of outbound requests and inbound responses; configurable block policies per agent
-- [ ] **OpenClaw E2E smoke test** — Full end-to-end verification with a real OpenClaw container on `sand_bed`
+
+---
+
+## Full Documentation
+
+- **[DESIGN.md](DESIGN.md)** — System architecture, data model, traffic types
+- **[examples/openclaw/README.md](examples/openclaw/README.md)** — Full OpenClaw integration guide
+- **[docs/openclaw-device-auth.md](docs/openclaw-device-auth.md)** — Device authentication strategies
+- **[coding_agent_logs/sessions/](coding_agent_logs/sessions/)** — Development session logs
+- **[coding_agent_logs/TROUBLESHOOTING_PLAYBOOK.md](coding_agent_logs/TROUBLESHOOTING_PLAYBOOK.md)** — Process improvements, anti-patterns, golden rules
 
 ---
 
