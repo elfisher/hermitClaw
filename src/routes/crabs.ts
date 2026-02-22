@@ -11,9 +11,9 @@ export async function crabsRoutes(app: FastifyInstance) {
    * Body: { name }
    */
   app.post<{
-    Body: { name: string };
+    Body: { name: string; uiPort?: number };
   }>('/v1/crabs', { preHandler: [requireAdmin] }, async (request, reply) => {
-    const { name } = request.body;
+    const { name, uiPort } = request.body;
 
     if (!name) {
       return reply.status(400).send({ error: 'name is required' });
@@ -27,7 +27,7 @@ export async function crabsRoutes(app: FastifyInstance) {
     const token = randomBytes(32).toString('hex');
 
     const crab = await db.crab.create({
-      data: { name, token },
+      data: { name, token, ...(uiPort ? { uiPort } : {}) },
     });
 
     // Token is only returned at creation time — not stored in plaintext after this
@@ -36,6 +36,7 @@ export async function crabsRoutes(app: FastifyInstance) {
       name: crab.name,
       token: crab.token, // show once
       active: crab.active,
+      uiPort: crab.uiPort,
       createdAt: crab.createdAt,
     });
   });

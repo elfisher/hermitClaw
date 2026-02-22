@@ -227,6 +227,34 @@ key (`MASTER_PEARL`) is a 32-byte hex value stored only in `.env` — never in t
 - Mode 3 workspace bots can read each other's subdirectories — intentional, documented
 - SSL inspection (full HTTPS content visibility) is out of scope
 
+### OpenClaw device authentication
+
+OpenClaw's gateway has a device pairing layer on top of password/token auth. On Docker-on-Mac, NAT makes the browser appear as an "external" device to the container, triggering pairing requirements.
+
+**Current approach:** `allowInsecureAuth: true` in `openclaw.json`
+
+This bypasses device pairing while keeping password authentication. Defense layers:
+
+| Layer | Status | What it protects |
+|-------|--------|------------------|
+| Tide Pool session | ✅ Enforced | Unauthorized access to `/agents/openclaw/` |
+| OpenClaw password | ✅ Enforced | Unauthorized WebSocket connections |
+| Network isolation | ✅ Enforced | OpenClaw on `sand_bed` (no internet) |
+| Device pairing | ❌ Bypassed | Credential replay from different device |
+
+**Tradeoff:**
+- **Lost:** Defense against credential replay if both Tide Pool session + OpenClaw password are compromised
+- **Gained:** Reliable connection through Docker NAT + HermitClaw proxy without manual device approval
+
+**When this is acceptable:**
+- Local development
+- Single-user or trusted team deployments
+- Docker-on-Mac (device pairing breaks due to NAT)
+
+**When stricter security is needed:**
+- Multi-tenant server deployments
+- See `docs/openclaw-device-auth.md` for automated device approval approach
+
 ---
 
 ## 9. Deployment

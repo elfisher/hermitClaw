@@ -119,6 +119,18 @@ the model tags as Ollama (or your cloud provider) returns them.
 | `HERMITCLAW_TOKEN` | `.clawbots/openclaw.env` | HermitClaw agent auth. OpenClaw uses this as `apiKey` when calling `/v1/chat/completions`. |
 | OpenClaw gateway token | `~/.openclaw/.env` | OpenClaw's own admin token for its Control UI. Managed by OpenClaw, unrelated to HermitClaw. |
 
+**Device authentication:**
+
+OpenClaw's gateway has a device pairing layer on top of password/token auth. Docker-on-Mac NAT makes your browser appear as an "external" device, triggering pairing requirements (Error 1008).
+
+The provided `openclaw.json` includes `gateway.controlUi.allowInsecureAuth: true` to bypass device pairing. This is the standard workaround for Docker-on-Mac. Defense layers remain:
+
+- ✅ Tide Pool session authentication
+- ✅ OpenClaw gateway password
+- ✅ Network isolation (sand_bed is internal-only)
+
+For stricter security (multi-tenant deployments), see `docs/openclaw-device-auth.md` for automated device approval.
+
 ---
 
 ### Step 3 — Start OpenClaw on the HermitClaw network
@@ -205,6 +217,33 @@ For server-side deployment and hardening best practices, follow the
 [OpenClaw installation docs](https://docs.openclaw.ai/install/docker). Deploy HermitClaw
 on the same host. Both services share the `sand_bed` Docker network. Never expose port 3000
 directly to the internet — use a reverse proxy with TLS or a VPN (e.g. Tailscale).
+
+---
+
+## E2E Test Checklist
+
+Run through these once you have HermitClaw and OpenClaw running together:
+
+- [ ] Tide Pool login gate works (session cookie set correctly)
+- [ ] OpenClaw container is on the right Docker network (tests reachability to `hermit_shell`, NOT proxied traffic — this must pass before anything else works): `docker exec openclaw curl http://hermit_shell:3000/health` → `{"status":"ok"}`
+- [ ] LLM call routed through HermitClaw: send a message in OpenClaw, check Tide Pool → Audit Log for a `EGRESS` entry
+- [ ] CONNECT proxy enforced: add a DENY rule in Network Rules, confirm outbound connection is blocked and logged
+- [ ] OpenClaw UI accessible via Tide Pool: `http://localhost:3000/agents/openclaw/`
+
+### Browser proxy verification (open question)
+
+OpenClaw's Pi agent respects `HTTP_PROXY`/`HTTPS_PROXY` for API traffic via `undici`.
+The sandboxed browser container (`openclaw-sandbox-browser`) is a separate Docker container
+spawned dynamically by OpenClaw. The following needs to be confirmed during E2E testing:
+
+- [ ] **What network do sandbox containers join?** Run `docker inspect <sandbox-container> | grep Networks` after Pi uses a browser tool. If it is NOT on `hermitclaw_sand_bed`, browser traffic has a direct internet route.
+- [ ] **Does OpenClaw pass `--proxy-server` to Chromium?** Check OpenClaw's browser launch logs. If not, add to `~/.openclaw/openclaw.json`:
+  ```json5
+  browser: {
+    // executablePath: "/usr/local/bin/chromium-with-proxy",  // wrapper script approach
+  }
+  ```
+- [ ] **Fallback**: If sandbox containers can't be forced onto `sand_bed`, add an explicit DENY rule for `*` at low priority in Network Rules so any unproxied traffic is blocked.
 
 ---
 

@@ -158,7 +158,7 @@ export async function modelRoutes(app: FastifyInstance) {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POST /v1/chat/completions — the model proxy
+  // POST /v1/chat/completions — OpenAI-compatible model proxy
   // ─────────────────────────────────────────────────────────────────────────
   app.post(
     '/v1/chat/completions',
@@ -238,7 +238,7 @@ export async function modelRoutes(app: FastifyInstance) {
 
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min for LLM
+        const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min for cold LLM starts + large prompts // 2 min for LLM
 
         const { statusCode: code, body, headers: upstreamHeaders } = await undiciRequest(upstreamUrl, {
           method: 'POST',
@@ -274,16 +274,135 @@ export async function modelRoutes(app: FastifyInstance) {
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-          await logTide(crab.id, provider.name, upstreamUrl, 504, undefined, 'Upstream LLM request timed out');
+          await logTide(crab.id, provider.name, upstreamUrl, 504, requestBodyRaw, undefined, 'Upstream LLM request timed out');
           return reply.status(504).send({ error: 'Model provider request timed out' });
         }
         const message = err instanceof Error ? err.message : 'Unknown error';
-        await logTide(crab.id, provider.name, upstreamUrl, 502, undefined, message);
+        await logTide(crab.id, provider.name, upstreamUrl, 502, requestBodyRaw, undefined, message);
         return reply.status(502).send({ error: `Model provider request failed: ${message}` });
       }
 
       // --- 5. Audit log ---
-      await logTide(crab.id, provider.name, upstreamUrl, statusCode, responseText);
+      await logTide(crab.id, provider.name, upstreamUrl, statusCode, requestBodyRaw, responseText);
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/chat — Ollama-native model proxy
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    '/api/chat',
+    { preHandler: requireCrab },
+    async (request, reply) => {
+      const crab = request.crab!;
+
+      // --- 1. Find an active provider ---
+      const globalProvider = await db.modelProvider.findFirst({
+        where: { active: true, scope: 'GLOBAL' },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const restrictedProvider = await db.modelProvider.findFirst({
+        where: {
+          active: true,
+          scope: 'RESTRICTED',
+          access: { some: { crabId: crab.id } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const provider = globalProvider ?? restrictedProvider;
+
+      if (!provider) {
+        return reply.status(503).send({
+          error: 'No model provider is configured or accessible for this agent.',
+        });
+      }
+
+      // --- 2. Build upstream URL ---
+      // For Ollama, use native /api/chat endpoint
+      const upstreamUrl = `${provider.baseUrl.replace(/\/$/, '')}/api/chat`;
+
+      // --- 3. Optionally inject API key from pearl vault ---
+      const headers: Record<string, string> = {
+        'content-type': 'application/json',
+      };
+
+      if (provider.pearlService) {
+        const pearl = await db.pearl.findUnique({
+          where: { crabId_service: { crabId: crab.id, service: provider.pearlService } },
+        });
+
+        const systemPearl = pearl ?? await db.pearl.findFirst({
+          where: { service: provider.pearlService },
+        });
+
+        if (systemPearl) {
+          try {
+            const apiKey = decryptPearl({
+              encryptedBlob: systemPearl.encryptedBlob,
+              iv: systemPearl.iv,
+              authTag: systemPearl.authTag,
+            });
+            headers['authorization'] = `Bearer ${apiKey}`;
+          } catch {
+            return reply.status(500).send({ error: 'Failed to decrypt provider API key' });
+          }
+        }
+      }
+
+      // --- 4. Stream upstream response ---
+      const requestBodyRaw = JSON.stringify(request.body);
+      const isStreaming = (request.body as any)?.stream === true;
+
+      let statusCode: number;
+      let responseText = '';
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min for cold LLM starts + large prompts
+
+        const { statusCode: code, body, headers: upstreamHeaders } = await undiciRequest(upstreamUrl, {
+          method: 'POST',
+          headers,
+          body: requestBodyRaw,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+        statusCode = code;
+
+        const contentType = upstreamHeaders['content-type'];
+        if (contentType) {
+          reply.header('content-type', contentType);
+        }
+
+        if (isStreaming) {
+          reply.status(statusCode);
+          const chunks: Buffer[] = [];
+          for await (const chunk of body) {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+            chunks.push(buf);
+            reply.raw.write(buf);
+          }
+          reply.raw.end();
+          responseText = Buffer.concat(chunks).toString('utf8').slice(0, 4096);
+        } else {
+          responseText = await body.text();
+          reply.status(statusCode).send(responseText);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          await logTide(crab.id, provider.name, upstreamUrl, 504, requestBodyRaw, undefined, 'Upstream LLM request timed out');
+          return reply.status(504).send({ error: 'Model provider request timed out' });
+        }
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        await logTide(crab.id, provider.name, upstreamUrl, 502, requestBodyRaw, undefined, message);
+        return reply.status(502).send({ error: `Model provider request failed: ${message}` });
+      }
+
+      // --- 5. Audit log ---
+      await logTide(crab.id, provider.name, upstreamUrl, statusCode, requestBodyRaw, responseText);
     },
   );
 }
@@ -295,6 +414,7 @@ async function logTide(
   tool: string,
   targetUrl: string,
   statusCode: number,
+  requestBody?: string,
   responseBody?: string,
   error?: string,
 ) {
@@ -306,6 +426,7 @@ async function logTide(
         tool,
         targetUrl,
         statusCode,
+        requestBody: requestBody ? requestBody.slice(0, 4096) : null,
         responseBody: responseBody ? responseBody.slice(0, 4096) : null,
         error: error ?? null,
       },

@@ -6,9 +6,12 @@
 
 ## Current State
 
-**Active Phase:** Phases 8A–8C complete + post-8C UX improvements. Next: OpenClaw E2E smoke test, then Phase 8D.
-**Last Session:** `011-ux-improvements-and-openclaw-docs` (this session)
+**Active Phase:** Session 009 (OpenClaw E2E + Ollama Integration) — ✅ Complete
+**Last Session:** `009-openclaw-ollama-integration`
 **Build status:** `tsc` clean (backend + frontend). 90/90 tests passing. `npm run dev` one-command startup working.
+**Multi-agent workflow:** ✅ Activated (Gemini CLI for research + code review)
+
+**Current task:** Ready for commit — Ollama native API integration complete with full documentation
 
 ---
 
@@ -40,8 +43,41 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ---
 
-## Recent Work (this session)
+## Recent Work (Session 009 — OpenClaw E2E Troubleshooting)
 
+**What was built:**
+- **Agent registration UI enhancements:** Agent type selector (Generic/OpenClaw), OpenClaw-specific setup commands in token dialog
+- **Dockerfile frontend build fix:** Added frontend build stage so `web/dist` is included in Docker image
+- **Agent UI proxy MIME type fix:** Fixed missing Content-Type headers by writing directly to `reply.raw.writeHead()` instead of `reply.headers()`
+- **WebSocket proxy path stripping:** Strip `/agents/:name/` prefix before forwarding to upstream container
+- **Vite proxy configuration:** Added `/agents` proxy rule with WebSocket support for dev mode
+- **OpenClaw device auth solution:** Documented `allowInsecureAuth: true` as acceptable tradeoff for Docker-on-Mac
+- **API client Content-Type fix:** Only set Content-Type when request body exists (fixes Fastify empty JSON body error)
+
+**Troubleshooting journey:**
+- **Problem:** WebSocket connection failing with `1008: pairing required` error
+- **Root cause:** OpenClaw's device pairing system treats Docker NAT connections as "external devices"
+- **Solution:** `gateway.controlUi.allowInsecureAuth: true` in `openclaw.json`
+- **Time spent:** ~4 hours actual vs ~20 minutes optimal
+- **Key lesson:** Search error codes immediately, test standalone first, use agents for unfamiliar systems
+
+**New documentation:**
+- `docs/openclaw-device-auth.md` — Comprehensive device auth strategies (3 approaches)
+- `coding_agent_logs/sessions/009-openclaw-e2e-troubleshooting.md` — Full session log
+- `coding_agent_logs/TROUBLESHOOTING_PLAYBOOK.md` — Process improvements (Golden Rules, checklists, anti-patterns)
+
+**Updates:**
+- `DESIGN.md` — Added OpenClaw device authentication to threat model
+- `examples/openclaw/README.md` — Added device auth explanation
+- `examples/openclaw/openclaw.json` — Added gateway security section with comments
+
+**Multi-agent workflow activated:**
+- ✅ Gemini CLI research pattern (proactive on blockers, unfamiliar systems)
+- ✅ Gemini CLI review pattern (after features, before commits)
+- ✅ Coordination structure: `coding_agent_logs/{research,reviews,handoffs}`
+- Expected efficiency: 5x context reduction, 12x time reduction
+
+**Previous session work (Session 011):**
 - **Dev UX improvements:** Auto-login with `VITE_ADMIN_API_KEY`, sticky token dialog (checkbox gate)
 - **Audit log detail drawer:** Clickable rows open right-side drawer with formatted request/response
 - **Audit log retention:** `audit_log_retention_days` setting, 24h interval pruning (no startup prune)
@@ -60,29 +96,28 @@ Full plan: [`PLAN.md`](../PLAN.md)
 
 ## What To Do Next
 
-**Recommended next steps (in order):**
+**Immediate tasks (Session 009 completion):**
 
-1. **OpenClaw E2E smoke test** — Full end-to-end verification:
-   ```bash
-   docker compose up -d
-   ./scripts/clawbot-add.sh openclaw 18789
-   cp examples/openclaw/openclaw.json ~/.openclaw/openclaw.json
-   # Edit models array to match your Ollama setup
-   docker run -d --name openclaw --network hermitclaw_sand_bed \
-     --env-file .clawbots/openclaw.env \
-     -v ~/.openclaw:/home/node/.openclaw openclaw:local
-   ```
-   Verify:
-   - Tide Pool login gate works
-   - `/agents/openclaw/` reverse proxy reaches the OpenClaw UI
-   - `/v1/chat/completions` routes to Ollama (check Audit Log)
-   - CONNECT proxy enforces domain rules
+1. **Complete E2E test** — IN PROGRESS
+   - ✅ OpenClaw container running on `hermitclaw_sand_bed`
+   - ✅ UI accessible at `http://localhost:3000/agents/openclaw/`
+   - ✅ WebSocket connected with password auth
+   - ⏳ **Next:** Send test message in OpenClaw, verify EGRESS audit log entry
+   - ⏳ Switch OpenClaw gateway from password to token mode
+   - ⏳ Update `examples/openclaw/openclaw.json` to use token mode
+   - ⏳ Verify browser proxy enforcement (sandbox container network placement)
 
-2. **Phase 8D — Inbound Routing** — `POST /v1/ingress/:provider` → lookup route → forward to agent on `sand_bed`. Design already in PLAN.md.
+2. **Gemini code review** — After E2E completion
+   - Session 009 work ready for review: WebSocket proxy, agent UI proxy, device auth solution
+   - Files to review: `src/routes/agent-ui.ts`, `web/src/pages/AgentsPage.tsx`, `web/src/api/client.ts`
 
-3. **Phase 6 — Activity Monitor** — Real-time view of tides (WebSocket stream). Design needed.
+**Recommended next steps (after Session 009):**
 
-4. **Phase 7 — Risk Scanner** — Scan agent output/behaviour for anomalies. Design needed.
+3. **Phase 8D — Inbound Routing** — `POST /v1/ingress/:provider` → lookup route → forward to agent on `sand_bed`. Design already in PLAN.md.
+
+4. **Phase 6 — Activity Monitor** — Real-time view of tides (WebSocket stream). Design needed.
+
+5. **Phase 7 — Risk Scanner** — Scan agent output/behaviour for anomalies. Design needed.
 
 ---
 

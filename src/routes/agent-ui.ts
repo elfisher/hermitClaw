@@ -84,7 +84,9 @@ export async function agentUiRoutes(app: FastifyInstance) {
               }
             }
 
-            reply.status(upstreamRes.statusCode ?? 502).headers(responseHeaders);
+            // Write headers directly to reply.raw — reply.headers() stores on
+            // Fastify's internal state which never flushes when we pipe to reply.raw.
+            reply.raw.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
             upstreamRes.pipe(reply.raw);
             upstreamRes.on('end', resolve);
             upstreamRes.on('error', reject);
@@ -148,8 +150,10 @@ export async function agentUiRoutes(app: FastifyInstance) {
     const upstream = net.createConnection({ host: name, port: crab.uiPort });
 
     upstream.once('connect', () => {
-      // Re-emit the original HTTP Upgrade request to the upstream
-      const requestLine = `${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/1.1\r\n`;
+      // Re-emit the original HTTP Upgrade request to the upstream.
+      // Strip the /agents/:name prefix — the container serves from its own root.
+      const upstreamPath = (match[2] || '/') + (match[3] ?? '');
+      const requestLine = `${req.method ?? 'GET'} ${upstreamPath} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)
         .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
         .join('\r\n');

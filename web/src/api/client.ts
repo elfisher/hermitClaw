@@ -5,7 +5,7 @@ const ADMIN_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: {
-      'Content-Type': 'application/json',
+      ...(init?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(ADMIN_KEY ? { 'x-admin-api-key': ADMIN_KEY } : {}),
       ...init?.headers,
     },
@@ -51,10 +51,10 @@ export async function getAgents(): Promise<Crab[]> {
   return data.crabs;
 }
 
-export async function createAgent(name: string): Promise<CrabWithToken> {
+export async function createAgent(name: string, uiPort?: number): Promise<CrabWithToken> {
   return apiFetch<CrabWithToken>('/v1/crabs', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(uiPort ? { uiPort } : {}) }),
   });
 }
 

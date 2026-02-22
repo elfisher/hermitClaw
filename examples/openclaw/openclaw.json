@@ -68,6 +68,21 @@
     },
   },
 
+  // ── Gateway security ───────────────────────────────────────────────────────
+  gateway: {
+    bind: "lan",         // Required to accept connections from HermitClaw proxy
+    auth: {
+      mode: "password",
+      password: "CHANGE_ME",  // Set a strong password here
+    },
+    controlUi: {
+      // Bypasses device pairing (required for Docker-on-Mac NAT).
+      // Password auth + Tide Pool session + network isolation still enforced.
+      // See docs/openclaw-device-auth.md for stricter alternatives.
+      allowInsecureAuth: true,
+    },
+  },
+
   // ── Model providers ────────────────────────────────────────────────────────
   models: {
     // "merge" adds this provider alongside existing ones rather than replacing them.
@@ -75,15 +90,16 @@
     providers: {
       hermitclaw: {
         // hermit_shell resolves on the hermitclaw_sand_bed Docker network.
-        // For local dev with backend on host: use http://localhost:3000/v1
-        baseUrl: "http://hermit_shell:3000/v1",
+        // For local dev with backend on host: use http://localhost:3000
+        baseUrl: "http://hermit_shell:3000",
 
         // HERMITCLAW_TOKEN is written to .clawbots/openclaw.env by clawbot-add.sh.
         // OpenClaw reads it from the environment at startup.
         apiKey: "${HERMITCLAW_TOKEN}",
 
-        // HermitClaw's model proxy is OpenAI-compatible.
-        api: "openai-completions",
+        // HermitClaw supports both OpenAI and Ollama formats.
+        // Use "ollama" for native Ollama /api/chat, or "openai-completions" for OpenAI /v1/chat/completions
+        api: "ollama",
 
         // List the models available through your HermitClaw providers.
         // Model IDs must match what your upstream providers return

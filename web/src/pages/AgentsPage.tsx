@@ -19,19 +19,97 @@ import {
   Alert,
   Checkbox,
   FormControlLabel,
+  ToggleButton,
+  ToggleButtonGroup,
+  Divider,
 } from '@mui/material';
 import { getAgents, createAgent, revokeAgent } from '../api/client.js';
 import type { Crab, CrabWithToken } from '../api/types.js';
+
+type AgentType = 'generic' | 'openclaw';
+
+function buildOpenClawConfig(token: string): string {
+  return `{
+  agents: {
+    defaults: {
+      model: { primary: "hermitclaw/llama3.1" },
+      models: {
+        "hermitclaw/llama3.1": { alias: "Llama 3.1" },
+      },
+    },
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      hermitclaw: {
+        baseUrl: "http://hermit_shell:3000/v1",
+        apiKey: "${token}",
+        api: "openai-completions",
+        models: [
+          {
+            id: "llama3.1",
+            name: "Llama 3.1 (via HermitClaw)",
+            contextWindow: 128000,
+            maxTokens: 32000,
+          },
+        ],
+      },
+    },
+  },
+}`;
+}
+
+function buildDockerRunCommand(token: string, name: string): string {
+  return `docker run -d \\
+  --name ${name} \\
+  --network hermitclaw_sand_bed \\
+  -e HERMITCLAW_TOKEN=${token} \\
+  -e HTTP_PROXY=http://hermit_shell:3000 \\
+  -e HTTPS_PROXY=http://hermit_shell:3000 \\
+  -e NO_PROXY=hermit_shell \\
+  -v ~/.openclaw:/home/node/.openclaw \\
+  openclaw:local`;
+}
+
+function CodeBlock({ children }: { children: string }) {
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        bgcolor: 'rgba(0,0,0,0.4)',
+        borderRadius: 1,
+        fontFamily: 'Roboto Mono, monospace',
+        fontSize: 12,
+        whiteSpace: 'pre',
+        overflowX: 'auto',
+        userSelect: 'all',
+        cursor: 'text',
+        border: '1px solid rgba(255,255,255,0.1)',
+        lineHeight: 1.6,
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 export function AgentsPage() {
   const [agents, setAgents] = useState<Crab[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  // Registration form state
+  const [agentType, setAgentType] = useState<AgentType>('generic');
   const [newName, setNewName] = useState('');
+  const [uiPort, setUiPort] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Token reveal dialog state
   const [newToken, setNewToken] = useState<CrabWithToken | null>(null);
+  const [newTokenType, setNewTokenType] = useState<AgentType>('generic');
   const [tokenCopied, setTokenCopied] = useState(false);
+
   const [agentToRevoke, setAgentToRevoke] = useState<Crab | null>(null);
 
   const load = useCallback(async () => {
@@ -48,14 +126,29 @@ export function AgentsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleAgentTypeChange = (_: React.MouseEvent<HTMLElement>, value: AgentType | null) => {
+    if (!value) return;
+    setAgentType(value);
+    if (value === 'openclaw') {
+      setUiPort('18789');
+      if (!newName) setNewName('openclaw');
+    } else {
+      setUiPort('');
+    }
+  };
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const created = await createAgent(newName.trim());
+      const port = uiPort ? parseInt(uiPort, 10) : undefined;
+      const created = await createAgent(newName.trim(), port);
       setNewToken(created);
+      setNewTokenType(agentType);
       setTokenCopied(false);
       setNewName('');
+      setUiPort('');
+      setAgentType('generic');
       setShowForm(false);
       await load();
     } catch (e) {
@@ -79,7 +172,11 @@ export function AgentsPage() {
   const handleCloseForm = () => {
     setShowForm(false);
     setNewName('');
+    setUiPort('');
+    setAgentType('generic');
   };
+
+  const isOpenClaw = newTokenType === 'openclaw';
 
   return (
     <Box>
@@ -97,37 +194,65 @@ export function AgentsPage() {
       )}
 
       {/* Token reveal dialog — requires explicit acknowledgment before closing */}
-      <Dialog open={!!newToken} maxWidth="sm" fullWidth disableEscapeKeyDown>
-        <DialogTitle>Agent Registered — Save Your Token</DialogTitle>
+      <Dialog open={!!newToken} maxWidth="md" fullWidth disableEscapeKeyDown>
+        <DialogTitle>
+          Agent Registered — {isOpenClaw ? 'Save Your Setup Commands' : 'Save Your Token'}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Agent <strong>{newToken?.name}</strong> has been registered. Copy the bearer token below —
-            it will <strong>not</strong> be shown again.
+            Agent <strong>{newToken?.name}</strong> has been registered. Copy the information below —
+            the bearer token will <strong>not</strong> be shown again.
           </DialogContentText>
-          <Box
-            sx={{
-              p: 2,
-              bgcolor: 'rgba(0,0,0,0.35)',
-              borderRadius: 1,
-              fontFamily: 'Roboto Mono',
-              fontSize: 13,
-              wordBreak: 'break-all',
-              userSelect: 'all',
-              cursor: 'text',
-              border: '1px solid rgba(255,255,255,0.12)',
-            }}
-          >
-            {newToken?.token}
-          </Box>
+
+          {/* Bearer token — always shown */}
+          <Typography variant="subtitle2" sx={{ color: 'slate-gray', mb: 0.5 }}>
+            Bearer Token
+          </Typography>
+          <CodeBlock>{newToken?.token ?? ''}</CodeBlock>
+
+          {isOpenClaw && newToken && (
+            <>
+              <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.08)' }} />
+
+              {/* openclaw.json config */}
+              <Typography variant="subtitle2" sx={{ color: 'slate-gray', mb: 0.5 }}>
+                ~/.openclaw/openclaw.json  (merge or create)
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'slate-gray', display: 'block', mb: 1 }}>
+                Replace model IDs with the models you have configured in HermitClaw &rarr; Providers.
+                See <code>examples/openclaw/openclaw.json</code> for the full config with all options.
+              </Typography>
+              <CodeBlock>{buildOpenClawConfig(newToken.token)}</CodeBlock>
+
+              <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.08)' }} />
+
+              {/* docker run command */}
+              <Typography variant="subtitle2" sx={{ color: 'slate-gray', mb: 0.5 }}>
+                Start OpenClaw container
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'slate-gray', display: 'block', mb: 1 }}>
+                Run this after writing the config above. OpenClaw must be on{' '}
+                <code>hermitclaw_sand_bed</code> to reach <code>hermit_shell</code>.
+              </Typography>
+              <CodeBlock>{buildDockerRunCommand(newToken.token, newToken.name)}</CodeBlock>
+
+              <Alert severity="info" sx={{ mt: 2, fontSize: 12 }}>
+                <strong>Two tokens in play:</strong> <code>HERMITCLAW_TOKEN</code> above is
+                HermitClaw's agent auth. OpenClaw also has its own gateway token (in{' '}
+                <code>~/.openclaw/.env</code>) — that's unrelated to HermitClaw.
+              </Alert>
+            </>
+          )}
+
           <FormControlLabel
-            sx={{ mt: 2 }}
+            sx={{ mt: 2, display: 'block' }}
             control={
               <Checkbox
                 checked={tokenCopied}
                 onChange={(e) => setTokenCopied(e.target.checked)}
               />
             }
-            label="I have copied my token"
+            label={isOpenClaw ? 'I have copied my token and setup commands' : 'I have copied my token'}
           />
         </DialogContent>
         <DialogActions>
@@ -204,12 +329,31 @@ export function AgentsPage() {
       )}
 
       {/* Register Agent Dialog */}
-      <Dialog open={showForm} onClose={handleCloseForm}>
+      <Dialog open={showForm} onClose={handleCloseForm} maxWidth="sm" fullWidth>
         <DialogTitle>Register New Agent</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            Enter a unique name for the new agent. The access token will be shown once upon creation.
+          <DialogContentText sx={{ mb: 2 }}>
+            Select an agent type to get started. OpenClaw agents get a pre-filled port and
+            ready-to-run setup commands after registration.
           </DialogContentText>
+
+          {/* Agent type selector */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ color: 'slate-gray', display: 'block', mb: 1 }}>
+              Agent Type
+            </Typography>
+            <ToggleButtonGroup
+              value={agentType}
+              exclusive
+              onChange={handleAgentTypeChange}
+              size="small"
+              fullWidth
+            >
+              <ToggleButton value="generic">Generic</ToggleButton>
+              <ToggleButton value="openclaw">OpenClaw</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
           <TextField
             autoFocus
             margin="dense"
@@ -219,7 +363,25 @@ export function AgentsPage() {
             variant="outlined"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
+            onKeyDown={(e) => e.key === 'Enter' && !uiPort && handleCreate()}
+            sx={{ mb: 1 }}
+          />
+
+          {/* uiPort field — always visible; pre-filled for OpenClaw */}
+          <TextField
+            margin="dense"
+            label="UI Port (optional)"
+            helperText={
+              agentType === 'openclaw'
+                ? "OpenClaw's dashboard port — enables the 'Open UI' button in Tide Pool"
+                : "If the agent exposes a web UI, enter the container port here"
+            }
+            type="number"
+            fullWidth
+            variant="outlined"
+            value={uiPort}
+            onChange={(e) => setUiPort(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
         </DialogContent>
         <DialogActions>
